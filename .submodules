@@ -1,0 +1,23 @@
+[submodule "mobile"]
+	path = mobile
+	url = https://github.com/ParkLink-AR/mobile
+  
+[submodule "auth-service"]
+	path = auth-service
+	url = https://github.com/ParkLink-AR/auth-service
+
+[submodule "payment-service"]
+	path = payment-service
+	url = https://github.com/ParkLink-AR/payment-service
+
+[submodule "notifications-service"]
+	path = notifications-service
+	url = https://github.com/ParkLink-AR/notifications-service
+
+[submodule "booking-service"]
+	path = booking-service
+	url = https://github.com/ParkLink-AR/booking-service
+
+[submodule "parking-service"]
+	path = parking-service
+	url = https://github.com/ParkLink-AR/parking-service
