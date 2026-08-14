@@ -21,3 +21,6 @@
 [submodule "parking-service"]
 	path = parking-service
 	url = git@github.com:ParkLink-AR/parking-service.git
+[submodule "gateway"]
+	path = gateway
+	url = git@github.com:ParkLink-AR/gateway.git
