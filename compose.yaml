@@ -1,0 +1,167 @@
+# Levanta todo el ecosistema de ParkLink que está funcionando hoy:
+# auth-service, parking-service, payment-service y el gateway (+ sus bases
+# de datos y RabbitMQ). booking-service y notifications-service todavía no
+# tienen código (solo README en sus carpetas), así que no están acá --
+# agregalos cuando existan, siguiendo el mismo patrón que los demás.
+#
+# Uso:
+#   cp .env.example .env   # completar JWT_SECRET, BREVO_API_KEY, credenciales de Mercado Pago
+#   docker compose up --build
+
+services:
+  # ---------------- auth-service ----------------
+  db-auth:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=parklink_auth
+      - POSTGRES_PASSWORD=parklink_auth
+      - POSTGRES_DB=parklink_auth_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - parklink_auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parklink_auth -d parklink_auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql://parklink_auth:parklink_auth@db-auth:5432/parklink_auth_db
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      - BREVO_API_KEY=${BREVO_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-no-reply@mail.parklink.com.ar}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-ParkLink Argentina}
+      - SKIP_EMAIL_VERIFICATION=${SKIP_EMAIL_VERIFICATION:-true}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:8000}
+    depends_on:
+      db-auth:
+        condition: service_healthy
+
+  # ---------------- parking-service ----------------
+  db-parking:
+    image: postgis/postgis:16-3.4
+    environment:
+      - POSTGRES_USER=parklink
+      - POSTGRES_PASSWORD=parklink
+      - POSTGRES_DB=parking_service
+    ports:
+      - "5432:5432"
+    volumes:
+      - parklink_parking_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parklink -d parking_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  parking-service:
+    build: ./parking-service
+    ports:
+      - "3001:3001"
+    environment:
+      - DB_HOST=db-parking
+      - DB_PORT=5432
+      - DB_USER=parklink
+      - DB_PASSWORD=parklink
+      - DB_NAME=parking_service
+      - PORT=3001
+      - NOMINATIM_BASE_URL=${NOMINATIM_BASE_URL:-https://nominatim.openstreetmap.org}
+      - NOMINATIM_USER_AGENT=${NOMINATIM_USER_AGENT:-parklink-app/1.0}
+    depends_on:
+      db-parking:
+        condition: service_healthy
+
+  # ---------------- payment-service ----------------
+  db-payment:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=user_payment
+      - POSTGRES_PASSWORD=pass_payment
+      - POSTGRES_DB=payment_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - parklink_payment_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_payment -d payment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  payment-service:
+    build: ./payment-service
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - DATABASE_URL=postgresql://user_payment:pass_payment@db-payment:5432/payment_db
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
+      # Sin credenciales reales de Mercado Pago el servicio arranca igual
+      # (necesita que las variables no estén vacías), pero crear una
+      # preferencia de pago real va a fallar hasta que pongas las tuyas acá.
+      - MERCADOPAGO_ACCESS_TOKEN=${MERCADOPAGO_ACCESS_TOKEN:-APP_USR-REEMPLAZAR}
+      - MERCADOPAGO_WEBHOOK_SECRET=${MERCADOPAGO_WEBHOOK_SECRET:-REEMPLAZAR_CON_LA_SECRET_DE_MERCADO_PAGO}
+      - MP_FORCE_TEST_PAYER_EMAIL=${MP_FORCE_TEST_PAYER_EMAIL:-}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8004}
+      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL:-http://localhost:8004}
+      - FRONTEND_SUCCESS_URL=${FRONTEND_SUCCESS_URL:-http://localhost:19006/payment/success}
+      - FRONTEND_FAILURE_URL=${FRONTEND_FAILURE_URL:-http://localhost:19006/payment/failure}
+      - FRONTEND_PENDING_URL=${FRONTEND_PENDING_URL:-http://localhost:19006/payment/pending}
+      - DEFAULT_CURRENCY=${DEFAULT_CURRENCY:-ARS}
+    depends_on:
+      db-payment:
+        condition: service_healthy
+
+  # ---------------- gateway ----------------
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # management UI (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - parklink_rabbitmq_data:/var/lib/rabbitmq
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - PARKING_SERVICE_URL=http://parking-service:3001
+      - PAYMENT_SERVICE_URL=http://payment-service:8004
+      - BOOKING_SERVICE_URL=
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - EVENTS_EXCHANGE=${EVENTS_EXCHANGE:-parklink.events}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    depends_on:
+      auth-service:
+        condition: service_started
+      parking-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  parklink_auth_db_data:
+  parklink_parking_db_data:
+  parklink_payment_db_data:
+  parklink_rabbitmq_data:
