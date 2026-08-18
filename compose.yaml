@@ -40,8 +40,10 @@ services:
       - BREVO_API_KEY=${BREVO_API_KEY:-}
       - EMAIL_FROM=${EMAIL_FROM:-no-reply@mail.parklink.com.ar}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-ParkLink Argentina}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-}
       - SKIP_EMAIL_VERIFICATION=${SKIP_EMAIL_VERIFICATION:-true}
-      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:8000}
     depends_on:
       db-auth:
         condition: service_healthy
