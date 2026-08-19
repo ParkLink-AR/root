@@ -30,6 +30,8 @@ services:
     build: ./auth-service
     ports:
       - "8000:8000"
+    volumes:
+      - parklink_auth_avatars:/app/app/static/avatars
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql://parklink_auth:parklink_auth@db-auth:5432/parklink_auth_db
@@ -164,6 +166,7 @@ services:
 
 volumes:
   parklink_auth_db_data:
+  parklink_auth_avatars:
   parklink_parking_db_data:
   parklink_payment_db_data:
   parklink_rabbitmq_data:
