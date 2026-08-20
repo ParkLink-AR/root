@@ -72,48 +72,6 @@ curl http://localhost:8080/health   # el gateway responde qué servicios tiene c
 
 ---
 
-## Variables de entorno / API keys
-
-Todas viven en el `.env` de la raíz (un solo archivo para todo el stack de Docker Compose). Cada servicio también tiene su propio `.env.example` más detallado por si lo corrés suelto, fuera de este compose.
-
-### `JWT_SECRET` — el más importante
-
-Lo usan **tanto `auth-service` como `gateway`**, y **tienen que coincidir**: `auth-service` firma el access token al hacer login, `gateway` lo verifica en cada request a una ruta protegida (`REQUIRED`) antes de reenviarla. Si en algún momento corrés estos dos servicios por separado (no vía este `docker compose`) y no coinciden, todo el tráfico autenticado va a devolver 401 aunque el login haya funcionado bien. El default de desarrollo (`dev-secret-change-me`) es el mismo en ambos automáticamente porque comparten el mismo `.env` acá.
-
-### Email — Brevo (`BREVO_API_KEY`)
-
-Usado por `auth-service` para mandar los códigos de verificación de email (registro, cambio de email, reset de contraseña). Sin la key:
-
-```
-[MAIL][DEV] Código de verificación para alguien@mail.com: 123456
-```
-
-queda logueado en `docker compose logs -f auth-service` en vez de mandarse un mail real — perfecto para probar el flujo completo en local sin cuenta de Brevo. Conseguí una key real en [app.brevo.com](https://app.brevo.com) (plan gratis alcanza) si necesitás que el mail llegue de verdad.
-
-### SMS — Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`)
-
-Mismo criterio que el email, para el código de verificación de teléfono: sin credenciales, `[SMS][DEV] Código de verificación para +549...: 123456` queda en el log de `auth-service`. Las credenciales reales salen de [console.twilio.com](https://console.twilio.com) — ojo que `TWILIO_ACCOUNT_SID` es el *Account SID* (empieza con `AC`), no un API Key SID (`SK`). Las cuentas trial de Twilio además sólo mandan SMS de texto libre a números verificados manualmente en la consola; para SMS real a cualquier número hace falta upgradear la cuenta.
-
-### `SKIP_EMAIL_VERIFICATION`
-
-- `false` (default en `.env.example`): el flujo real — hay que verificar email y teléfono con código antes de poder loguearse. Es lo que prueba mobile.
-- `true`: saltea esa verificación al registrarse. Sirve para tests automatizados o para no tener que copiar códigos de los logs constantemente, pero no representa el flujo real de la app.
-
-### Mercado Pago (`MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`)
-
-Usadas por `payment-service`. Sin credenciales reales el servicio arranca igual (necesita que las variables no estén vacías, por eso el placeholder `APP_USR-REEMPLAZAR`), pero crear una preferencia de pago de verdad va a fallar. Sacá credenciales de **prueba** (TEST, no producción) desde [Mercado Pago Developers](https://www.mercadopago.com.ar/developers/panel).
-
-### Nominatim (`NOMINATIM_BASE_URL`, `NOMINATIM_USER_AGENT`)
-
-Usado por `parking-service` para geocodificar direcciones. Por default pega contra el servidor público de OpenStreetMap, que tiene rate-limit y pide un `User-Agent` identificable (ya viene seteado) — para uso intensivo conviene un servidor Nominatim propio.
-
-### Lo que **no** hace falta tocar
-
-- `DATABASE_URL` de cada servicio: apuntan a las bases `db-*` de este mismo compose, no son configurables desde el `.env` de la raíz a propósito.
-- Las fotos de perfil (`avatar_url`) se guardan en el volumen `parklink_auth_avatars`, servidas por `auth-service` vía `/static` y proxeadas por el gateway — no necesitan configuración extra, pero si corrés `make clean` se pierden junto con la base.
-
----
-
 ## Conectar la app mobile
 
 `mobile` es una app Expo, no está en el `docker compose` de la raíz — se corre aparte:
