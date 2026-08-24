@@ -56,7 +56,7 @@ function renderWeeklyChart(buckets) {
     type: "bar",
     data: {
       labels: buckets.map((b) => b.label),
-      datasets: [buildBarDataset("Ingresos", buckets.map((b) => b.amount), "#2563eb")],
+      datasets: [buildBarDataset("Ingresos", buckets.map((b) => b.amount), "#3a5bd9")],
     },
     options: {
       ...CHART_DEFAULTS,
@@ -114,7 +114,7 @@ function renderBookingStatusChart(stats) {
       labels: ["Confirmadas", "Pendientes", "Canceladas"],
       datasets: [{
         data: [confirmed, pending, cancelled],
-        backgroundColor: ["#16a34a", "#ea580c", "#dc2626"],
+        backgroundColor: ["#3a5bd9", "#8d93a5", "#c5cef5"],
         borderWidth: 0,
         hoverOffset: 4,
       }],
