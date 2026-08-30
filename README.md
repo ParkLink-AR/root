@@ -61,7 +61,27 @@ make clean   # docker compose down -v -- baja los contenedores Y BORRA los volú
 
 Usá `make clean` cuando quieras arrancar con una base de datos completamente limpia (por ejemplo, después de bajar un submódulo con un cambio de modelo/schema — acá **no se usan migraciones incrementales**, cada servicio recrea su esquema completo desde los modelos actuales al arrancar, así que una DB vieja con columnas de menos puede romper).
 
-### 3. Verificar que levantó todo
+### 3. Cargar cuentas de prueba
+
+Después de levantar el entorno por primera vez (o después de un `make clean`), inyectá las cuentas demo con:
+
+```bash
+docker exec -i pll-db-auth-1 psql \
+    -U parklink_auth -d parklink_auth_db \
+    < auth-service/scripts/seed_users.sql
+```
+
+Esto inserta (o deja pasar si ya existen) las siguientes cuentas con email ya verificado:
+
+| Email | Contraseña | Rol sugerido |
+|---|---|---|
+| `conductor@parklink.com` | `Conductor1!` | Conductor (driver) |
+| `propietario@parklink.com` | `Propietario1!` | Propietario (owner) |
+| `admin@parklink.com` | `Admin1!` | Admin / testing general |
+
+> **Nota:** estas cuentas son solo para desarrollo local. No las uses en un entorno accesible desde internet.
+
+### 4. Verificar que levantó todo
 
 ```bash
 docker compose ps
@@ -74,11 +94,13 @@ curl http://localhost:8080/health   # el gateway responde qué servicios tiene c
 
 ## Conectar la app mobile
 
-`mobile` es una app Expo, no está en el `docker compose` de la raíz — se corre aparte:
+`mobile` es una app Expo, no está en el `docker compose` de la raíz — se corre aparte.
+
+> ⚠️ **Importante:** todos los comandos de la app mobile **deben correr desde la carpeta `mobile/`**, no desde la raíz del repo. Si corrés `npx expo start` desde la raíz, Metro resuelve las rutas mal y Expo Go devuelve un error 404 al intentar cargar la app.
 
 ```bash
-cd mobile
-cp .env.example .env   # ya trae EXPO_PUBLIC_API_URL=http://localhost:8080, andá al archivo si necesitás cambiarlo
+cd mobile                          # <-- imprescindible, no correr desde la raíz
+cp .env.example .env               # ya trae EXPO_PUBLIC_API_URL=http://localhost:8080
 npm install
 npx expo start
 ```
@@ -120,3 +142,83 @@ git push
 ```
 
 Si te olvidás este paso, para cualquiera que clone la raíz de nuevo (o corra `git submodule update`) el submódulo va a seguir apuntando al commit viejo, aunque adentro de esa carpeta vos ya hayas pusheado el cambio.
+
+---
+
+## Variables de entorno / API keys
+
+| Variable | Servicio | Qué hace si no está | Qué poner en producción |
+|---|---|---|---|
+| `JWT_SECRET` | auth, gateway, payment | Usa `dev-secret-change-me` (¡inseguro!) | Un string largo y aleatorio |
+| `BREVO_API_KEY` | auth-service | Loguea el código de verificación en vez de mandar email | API key de [Brevo](https://app.brevo.com/) |
+| `TWILIO_*` | auth-service | Loguea el código SMS en vez de mandarlo | Credenciales de [Twilio](https://console.twilio.com) |
+| `MERCADOPAGO_ACCESS_TOKEN` | payment-service | El servicio arranca pero crear preferencias de pago falla | Access Token de [MP Developers](https://www.mercadopago.com.ar/developers/panel/app) |
+| `MERCADOPAGO_WEBHOOK_SECRET` | payment-service | El webhook no valida firma (modo demo) | Secret del webhook en el panel de MP |
+| `MP_FORCE_TEST_PAYER_EMAIL` | payment-service | Usa el email del usuario logueado | Email del comprador de prueba del sandbox de MP |
+| `WEBHOOK_BASE_URL` | payment-service | Usa `http://localhost:8004` (MP no puede alcanzarlo) | URL pública del servidor — ver abajo |
+| `FRONTEND_SUCCESS_URL` | payment-service | `parklink://payment/success` | Igual (deep link de la app) |
+| `FRONTEND_FAILURE_URL` | payment-service | `parklink://payment/failure` | Igual |
+| `FRONTEND_PENDING_URL` | payment-service | `parklink://payment/pending` | Igual |
+
+### Configurar WEBHOOK_BASE_URL para desarrollo local
+
+Mercado Pago necesita una URL pública para notificarte cuando un pago cambia de estado. En desarrollo local, usá **ngrok** para exponer el payment-service:
+
+```bash
+# 1. Instalar ngrok (una sola vez)
+brew install ngrok/ngrok/ngrok   # macOS
+# o: npm install -g ngrok
+
+# 2. Levantar el túnel (el payment-service corre en el puerto 8004)
+npx ngrok http 8004
+# → Anotá la URL https://xxxx.ngrok.io que aparece
+
+# 3. Copiá esa URL en tu .env
+echo "WEBHOOK_BASE_URL=https://xxxx.ngrok.io" >> .env
+
+# 4. Configurá el mismo endpoint en el panel de MP:
+#    MP Developers → tu app → Webhooks → Agregar URL
+#    URL: https://xxxx.ngrok.io/api/payments/webhook
+#    Eventos: payment
+
+# 5. Reiniciá el payment-service para que tome la nueva variable
+docker compose restart payment-service
+```
+
+> **Nota:** cada vez que reiniciás ngrok te da una URL distinta. Tenés que actualizar `.env` y el panel de MP.
+
+---
+
+## Booking + Pago: flujo completo
+
+El flujo de reserva tiene varios pasos encadenados. Si alguno falla el siguiente tampoco funciona:
+
+```
+[Mobile] spot/[id].tsx
+  → Muestra slots disponibles consultando disponibilidad real vía GET /parking-spots/{id}/availability
+  → Usuario elige slot y toca "Reservar"
+
+[Mobile] booking/confirm.tsx
+  → POST /parking-spots/{spotId}/bookings   (booking-service)
+      Crea la reserva en estado PENDING_PAYMENT con hold de 15 min
+      Devuelve: { id: "<bookingId>", ... }
+  → POST /payments/create-preference        (payment-service)
+      Body: { amount, title, externalReference: bookingId }
+      Devuelve: { checkoutUrl, preferenceId, externalReference }
+  → Abre checkoutUrl en WebBrowser (Expo)
+  → Usuario paga en Mercado Pago
+  → MP llama al webhook: POST /api/payments/webhook
+  → payment-service confirma la reserva: POST /bookings/{bookingId}/confirm
+  → MP redirige al deep link parklink://payment/success
+  → La app cierra el WebBrowser y navega a la pantalla de reservas
+```
+
+### Errores frecuentes
+
+| Síntoma | Causa probable | Solución |
+|---|---|---|
+| `create-preference` devuelve 500 | `MERCADOPAGO_ACCESS_TOKEN` no configurado o inválido | Revisar token en `.env` y en el panel de MP |
+| Webhook no llega | `WEBHOOK_BASE_URL` no es pública | Usar ngrok, ver sección arriba |
+| Booking da 409 Conflict | El slot ya está ocupado (otro usuario reservó o hay un hold activo) | El slot no debería haberse mostrado — revisar disponibilidad real |
+| Booking da 400 OUTSIDE_PUBLISHED_HOURS | El horario no está en el schedule del parking spot | Verificar que el spot tenga schedule publicado para ese día |
+| Booking da 400 INVALID_DATE_RANGE | `start >= end` en el request | Revisar cálculo de fechas en la app |

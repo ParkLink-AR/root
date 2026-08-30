@@ -83,8 +83,9 @@
 
     <!-- Top bar -->
     <header class="topbar">
-      <div>
+      <div style="display:flex;align-items:center;gap:10px">
         <div class="topbar-title" id="topbar-title">Resumen</div>
+        <span id="demo-badge" class="badge badge-green" style="font-size:10px;letter-spacing:.6px">DEMO</span>
       </div>
       <div class="topbar-right">
         <input
@@ -357,7 +358,32 @@
         </div>
       </div>
 
-      <div class="alert alert-warn" id="users-notice">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Crecimiento de usuarios – últimos 6 meses</div>
+              <div class="chart-card-sub">Nuevos registros por mes</div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-user-growth"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Distribución de usuarios</div>
+              <div class="chart-card-sub">Por estado de cuenta</div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-user-status"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert alert-warn" id="users-notice" style="display:none">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
@@ -414,7 +440,7 @@
         </div>
       </div>
 
-      <div class="alert alert-warn" id="parking-notice">
+      <div class="alert alert-warn" id="parking-notice" style="display:none">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
@@ -462,19 +488,32 @@
         </div>
       </div>
 
-      <div class="chart-card" style="max-width:420px">
-        <div class="chart-card-header">
-          <div>
-            <div class="chart-card-title">Estado de las reservas</div>
-            <div class="chart-card-sub">Distribución por estado</div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Estado de las reservas</div>
+              <div class="chart-card-sub">Distribución por estado</div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-booking-status"></canvas>
           </div>
         </div>
-        <div class="chart-wrap">
-          <canvas id="chart-booking-status"></canvas>
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Tendencia semanal de reservas</div>
+              <div class="chart-card-sub">Reservas confirmadas por día</div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-booking-trend"></canvas>
+          </div>
         </div>
       </div>
 
-      <div class="alert alert-warn" id="bookings-notice">
+      <div class="alert alert-warn" id="bookings-notice" style="display:none">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
@@ -614,62 +653,63 @@ function populateAll(metrics) {
   setEl("rev-week",  formatARS(metrics.paymentWeek));
   setEl("rev-month", formatARS(metrics.paymentMonth));
 
-  // duplicate canvases in revenue page
+  // Revenue page – reuse the same render functions from charts.js, just targeting
+  // the duplicate canvases on the Revenue page.
   if (metrics.weeklyRevenue.length) {
-    const ctx = document.getElementById("chart-weekly-rev");
-    if (ctx) {
-      const existing = Chart.getChart(ctx);
+    const canvas = document.getElementById("chart-weekly-rev");
+    if (canvas) {
+      const existing = Chart.getChart(canvas);
       if (existing) existing.destroy();
-      new Chart(ctx.getContext("2d"), {
+      const ctx = canvas.getContext("2d");
+      const grad = ctx.createLinearGradient(0, 0, 0, 200);
+      grad.addColorStop(0, "#16a34acc"); grad.addColorStop(1, "#16a34a28");
+      new Chart(ctx, {
         type: "bar",
         data: {
           labels: metrics.weeklyRevenue.map((b) => b.label),
-          datasets: [{
-            data: metrics.weeklyRevenue.map((b) => b.amount),
-            backgroundColor: "#16a34a",
-            borderRadius: 5,
-            borderSkipped: false,
-          }],
+          datasets: [{ data: metrics.weeklyRevenue.map((b) => b.amount),
+            backgroundColor: grad, borderColor: "#16a34a", borderWidth: 1,
+            borderRadius: 6, borderSkipped: false }],
         },
-        options: {
-          responsive: true, maintainAspectRatio: false,
+        options: { responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false },
-            tooltip: { callbacks: { label: (c) => ` $${Number(c.raw).toLocaleString("es-AR", { minimumFractionDigits: 2 })} ARS` } } },
+            tooltip: { backgroundColor: "#1e2030", titleColor: "#e8eaf0", bodyColor: "#9aa0b0",
+              padding: 10, cornerRadius: 6,
+              callbacks: { label: (c) => ` $${Number(c.raw).toLocaleString("es-AR", { minimumFractionDigits: 2 })} ARS` } } },
           scales: {
             x: { grid: { display: false }, ticks: { font: { size: 11 }, color: "#6b7280" } },
             y: { grid: { color: "#f0f2f5" }, ticks: { font: { size: 11 }, color: "#6b7280",
               callback: (v) => `$${Number(v).toLocaleString("es-AR")}` }, beginAtZero: true },
-          },
-        },
+          } },
       });
     }
   }
   if (metrics.monthlyRevenue.length) {
-    const ctx = document.getElementById("chart-monthly-rev");
-    if (ctx) {
-      const existing = Chart.getChart(ctx);
+    const canvas = document.getElementById("chart-monthly-rev");
+    if (canvas) {
+      const existing = Chart.getChart(canvas);
       if (existing) existing.destroy();
-      new Chart(ctx.getContext("2d"), {
+      const ctx = canvas.getContext("2d");
+      const grad = ctx.createLinearGradient(0, 0, 0, 200);
+      grad.addColorStop(0, "#6a82e8cc"); grad.addColorStop(1, "#6a82e828");
+      new Chart(ctx, {
         type: "bar",
         data: {
           labels: metrics.monthlyRevenue.map((b) => b.label),
-          datasets: [{
-            data: metrics.monthlyRevenue.map((b) => b.amount),
-            backgroundColor: "#6a82e8",
-            borderRadius: 5,
-            borderSkipped: false,
-          }],
+          datasets: [{ data: metrics.monthlyRevenue.map((b) => b.amount),
+            backgroundColor: grad, borderColor: "#6a82e8", borderWidth: 1,
+            borderRadius: 6, borderSkipped: false }],
         },
-        options: {
-          responsive: true, maintainAspectRatio: false,
+        options: { responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false },
-            tooltip: { callbacks: { label: (c) => ` $${Number(c.raw).toLocaleString("es-AR", { minimumFractionDigits: 2 })} ARS` } } },
+            tooltip: { backgroundColor: "#1e2030", titleColor: "#e8eaf0", bodyColor: "#9aa0b0",
+              padding: 10, cornerRadius: 6,
+              callbacks: { label: (c) => ` $${Number(c.raw).toLocaleString("es-AR", { minimumFractionDigits: 2 })} ARS` } } },
           scales: {
             x: { grid: { display: false }, ticks: { font: { size: 11 }, color: "#6b7280" } },
             y: { grid: { color: "#f0f2f5" }, ticks: { font: { size: 11 }, color: "#6b7280",
               callback: (v) => `$${Number(v).toLocaleString("es-AR")}` }, beginAtZero: true },
-          },
-        },
+          } },
       });
     }
   }
@@ -682,7 +722,6 @@ function populateAll(metrics) {
   setEl("usr-deleted",   formatNum(us?.deleted));
   setEl("usr-new-week",  formatNum(us?.new_this_week));
   setEl("usr-new-month", formatNum(us?.new_this_month));
-  if (us) document.getElementById("users-notice").style.display = "none";
 
   // ── Parking page ───────────────────────────────────────────────────────────
   document.getElementById("last-updated-parking").textContent = ts;
@@ -691,7 +730,6 @@ function populateAll(metrics) {
   setEl("ps-paused",  formatNum(ps?.paused));
   setEl("ps-deleted", formatNum(ps?.deleted));
   setEl("ps-owners",  formatNum(ps?.unique_owners));
-  if (ps) document.getElementById("parking-notice").style.display = "none";
 
   // ── Bookings page ──────────────────────────────────────────────────────────
   document.getElementById("last-updated-bookings").textContent = ts;
@@ -701,7 +739,6 @@ function populateAll(metrics) {
   setEl("bk-cancelled", formatNum(bk?.cancelled));
   setEl("bk-week",      formatNum(bk?.this_week));
   setEl("bk-month",     formatNum(bk?.this_month));
-  if (bk) document.getElementById("bookings-notice").style.display = "none";
 
   // ── Charts ─────────────────────────────────────────────────────────────────
   renderCharts(metrics);
