@@ -1,8 +1,8 @@
 # Levanta todo el ecosistema de ParkLink que está funcionando hoy:
-# auth-service, parking-service, payment-service y el gateway (+ sus bases
-# de datos y RabbitMQ). booking-service y notifications-service todavía no
-# tienen código (solo README en sus carpetas), así que no están acá --
-# agregalos cuando existan, siguiendo el mismo patrón que los demás.
+# auth-service, parking-service, booking-service, payment-service y el
+# gateway (+ sus bases de datos y RabbitMQ).
+# notifications-service todavía no tiene código — agregalo cuando exista,
+# siguiendo el mismo patrón que los demás.
 #
 # Uso:
 #   cp .env.example .env   # completar JWT_SECRET, BREVO_API_KEY, credenciales de Mercado Pago
@@ -80,8 +80,42 @@ services:
       - PORT=3001
       - NOMINATIM_BASE_URL=${NOMINATIM_BASE_URL:-https://nominatim.openstreetmap.org}
       - NOMINATIM_USER_AGENT=${NOMINATIM_USER_AGENT:-parklink-app/1.0}
+      - BOOKING_SERVICE_URL=http://booking-service:8080
     depends_on:
       db-parking:
+        condition: service_healthy
+
+  # ---------------- booking-service ----------------
+  db-booking:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=bookinguser
+      - POSTGRES_PASSWORD=bookingpass
+      - POSTGRES_DB=booking_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - parklink_booking_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookinguser -d booking_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  booking-service:
+    build: ./booking-service
+    ports:
+      - "8081:8080"
+    environment:
+      - HTTP_PORT=8080
+      - DB_DSN=postgres://bookinguser:bookingpass@db-booking:5432/booking_db?sslmode=disable
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - BOOKING_HOLD_MINUTES=15
+      - BOOKING_AVAILABILITY_MAX_DAYS=14
+    depends_on:
+      db-booking:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   # ---------------- payment-service ----------------
@@ -109,21 +143,28 @@ services:
       - PORT=8004
       - DATABASE_URL=postgresql://user_payment:pass_payment@db-payment:5432/payment_db
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
-      # Sin credenciales reales de Mercado Pago el servicio arranca igual
-      # (necesita que las variables no estén vacías), pero crear una
-      # preferencia de pago real va a fallar hasta que pongas las tuyas acá.
+      # Sin credenciales reales de Mercado Pago el servicio arranca igual,
+      # pero crear una preferencia de pago real va a fallar.
+      # Configurá MERCADOPAGO_ACCESS_TOKEN y MERCADOPAGO_WEBHOOK_SECRET en tu .env.
       - MERCADOPAGO_ACCESS_TOKEN=${MERCADOPAGO_ACCESS_TOKEN:-APP_USR-REEMPLAZAR}
       - MERCADOPAGO_WEBHOOK_SECRET=${MERCADOPAGO_WEBHOOK_SECRET:-REEMPLAZAR_CON_LA_SECRET_DE_MERCADO_PAGO}
       - MP_FORCE_TEST_PAYER_EMAIL=${MP_FORCE_TEST_PAYER_EMAIL:-}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8004}
+      # WEBHOOK_BASE_URL debe ser una URL pública (ej. ngrok) para que MP pueda
+      # notificar pagos. Ver instrucciones en .env.example.
       - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL:-http://localhost:8004}
-      - FRONTEND_SUCCESS_URL=${FRONTEND_SUCCESS_URL:-http://localhost:19006/payment/success}
-      - FRONTEND_FAILURE_URL=${FRONTEND_FAILURE_URL:-http://localhost:19006/payment/failure}
-      - FRONTEND_PENDING_URL=${FRONTEND_PENDING_URL:-http://localhost:19006/payment/pending}
+      # Deep links: Mercado Pago redirige al usuario a estas URLs al terminar el pago.
+      - FRONTEND_SUCCESS_URL=${FRONTEND_SUCCESS_URL:-parklink://payment/success}
+      - FRONTEND_FAILURE_URL=${FRONTEND_FAILURE_URL:-parklink://payment/failure}
+      - FRONTEND_PENDING_URL=${FRONTEND_PENDING_URL:-parklink://payment/pending}
       - DEFAULT_CURRENCY=${DEFAULT_CURRENCY:-ARS}
+      - BOOKING_SERVICE_URL=http://booking-service:8080
+      - BOOKING_SERVICE_AUTH_TOKEN=${BOOKING_SERVICE_AUTH_TOKEN:-}
     depends_on:
       db-payment:
         condition: service_healthy
+      booking-service:
+        condition: service_started
 
   # ---------------- gateway ----------------
   rabbitmq:
@@ -148,7 +189,7 @@ services:
       - AUTH_SERVICE_URL=http://auth-service:8000
       - PARKING_SERVICE_URL=http://parking-service:3001
       - PAYMENT_SERVICE_URL=http://payment-service:8004
-      - BOOKING_SERVICE_URL=
+      - BOOKING_SERVICE_URL=http://booking-service:8080
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
@@ -161,6 +202,8 @@ services:
         condition: service_started
       payment-service:
         condition: service_started
+      booking-service:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
 
@@ -169,4 +212,5 @@ volumes:
   parklink_auth_avatars:
   parklink_parking_db_data:
   parklink_payment_db_data:
+  parklink_booking_db_data:
   parklink_rabbitmq_data:
