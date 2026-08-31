@@ -5,7 +5,7 @@
 # agregalos cuando existan, siguiendo el mismo patrón que los demás.
 #
 # Uso:
-#   cp .env.example .env   # completar JWT_SECRET, BREVO_API_KEY, credenciales de Mercado Pago
+#   cp .env.example .env   # completar JWT_SECRET, BREVO_API_KEY, credenciales de Mercado Pago y R2 (ver DEPLOY.md)
 #   docker compose up --build
 
 services:
@@ -30,8 +30,6 @@ services:
     build: ./auth-service
     ports:
       - "8000:8000"
-    volumes:
-      - parklink_auth_avatars:/app/app/static/avatars
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql://parklink_auth:parklink_auth@db-auth:5432/parklink_auth_db
@@ -46,6 +44,14 @@ services:
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
       - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-}
       - SKIP_EMAIL_VERIFICATION=${SKIP_EMAIL_VERIFICATION:-true}
+      # Cloudflare R2 -- avatares subidos acá (ver DEPLOY.md para cómo crear
+      # el bucket). parking-service usa el mismo bucket/credenciales para
+      # las fotos de cochera.
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
     depends_on:
       db-auth:
         condition: service_healthy
@@ -80,6 +86,12 @@ services:
       - PORT=3001
       - NOMINATIM_BASE_URL=${NOMINATIM_BASE_URL:-https://nominatim.openstreetmap.org}
       - NOMINATIM_USER_AGENT=${NOMINATIM_USER_AGENT:-parklink-app/1.0}
+      # Mismo bucket R2 que auth-service, para las fotos de cochera.
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
     depends_on:
       db-parking:
         condition: service_healthy
@@ -166,7 +178,6 @@ services:
 
 volumes:
   parklink_auth_db_data:
-  parklink_auth_avatars:
   parklink_parking_db_data:
   parklink_payment_db_data:
   parklink_rabbitmq_data:

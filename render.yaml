@@ -1,0 +1,237 @@
+# Render Blueprint — deploys the ParkLink backend + admin dashboard for free.
+#
+# Reference: https://render.com/docs/blueprint-spec (the exact field names
+# below — `env: docker` vs `runtime: docker`, `type: static` vs
+# `runtime: static` — have changed before as Render evolves the schema. If
+# Render's Blueprint import rejects a field, it names the exact line in the
+# error; rename that key to whatever the current docs say and everything
+# else here still applies).
+#
+# NOT included on purpose:
+#   - rabbitmq: nothing consumes the events it would carry yet
+#     (notifications-service has no code), and gateway/app/rabbitmq.py
+#     already degrades gracefully when RABBITMQ_URL is unreachable. Add it
+#     back the day notifications-service exists.
+#   - booking-service / notifications-service: no code yet, same as the
+#     local compose.yaml.
+#   - mobile: it's an Expo app, not something Render hosts. Point its
+#     EXPO_PUBLIC_API_URL at parklink-gateway's URL below when testing
+#     against this deploy.
+#
+# One free Postgres instance is shared by all three services (Render's free
+# plan allows one free Postgres per account) — see DEPLOY.md for the
+# post-deploy step of creating the extra databases and enabling PostGIS.
+
+databases:
+  - name: parklink-postgres
+    plan: free
+    databaseName: parklink_auth_db
+    user: parklink_auth
+
+services:
+  # ---------------- auth-service ----------------
+  - type: web
+    name: parklink-auth-service
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./auth-service/Dockerfile
+    dockerContext: ./auth-service
+    healthCheckPath: /livez
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: parklink-postgres
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "15"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "30"
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: no-reply@mail.parklink.com.ar
+      - key: EMAIL_FROM_NAME
+        value: ParkLink Argentina
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: SKIP_EMAIL_VERIFICATION
+        value: "true"
+      # Cloudflare R2 -- avatares (parking-service reusa este mismo bucket
+      # para fotos de cochera via `fromService` más abajo). Ver DEPLOY.md.
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+
+  # ---------------- parking-service ----------------
+  # Uses the shared Postgres instance too (needs the `parking_service`
+  # database + `postgis` extension created manually first, see DEPLOY.md —
+  # Render's managed Postgres doesn't support the postgis/postgis Docker
+  # image the local compose.yaml uses, but it does support the extension).
+  - type: web
+    name: parklink-parking-service
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./parking-service/Dockerfile
+    dockerContext: ./parking-service
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: parking_service
+      - key: PORT
+        value: "3001"
+      - key: NOMINATIM_BASE_URL
+        value: https://nominatim.openstreetmap.org
+      - key: NOMINATIM_USER_AGENT
+        value: parklink-app/1.0
+      # Mismo bucket R2 que auth-service -- se referencia en vez de
+      # duplicar las credenciales a mano en este servicio también.
+      - key: R2_ACCOUNT_ID
+        fromService:
+          type: web
+          name: parklink-auth-service
+          envVarKey: R2_ACCOUNT_ID
+      - key: R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: parklink-auth-service
+          envVarKey: R2_ACCESS_KEY_ID
+      - key: R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: parklink-auth-service
+          envVarKey: R2_SECRET_ACCESS_KEY
+      - key: R2_BUCKET_NAME
+        fromService:
+          type: web
+          name: parklink-auth-service
+          envVarKey: R2_BUCKET_NAME
+      - key: R2_PUBLIC_URL
+        fromService:
+          type: web
+          name: parklink-auth-service
+          envVarKey: R2_PUBLIC_URL
+
+  # ---------------- payment-service ----------------
+  - type: web
+    name: parklink-payment-service
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./payment-service/Dockerfile
+    dockerContext: ./payment-service
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8004"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        fromService:
+          type: web
+          name: parklink-auth-service
+          envVarKey: JWT_SECRET
+      - key: MERCADOPAGO_ACCESS_TOKEN
+        sync: false
+      - key: MERCADOPAGO_WEBHOOK_SECRET
+        sync: false
+      - key: MP_FORCE_TEST_PAYER_EMAIL
+        sync: false
+      - key: APP_BASE_URL
+        value: https://parklink-payment-service.onrender.com
+      - key: WEBHOOK_BASE_URL
+        value: https://parklink-payment-service.onrender.com
+      - key: FRONTEND_SUCCESS_URL
+        sync: false
+      - key: FRONTEND_FAILURE_URL
+        sync: false
+      - key: FRONTEND_PENDING_URL
+        sync: false
+      - key: DEFAULT_CURRENCY
+        value: ARS
+
+  # ---------------- gateway ----------------
+  - type: web
+    name: parklink-gateway
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./gateway/Dockerfile
+    dockerContext: ./gateway
+    healthCheckPath: /livez
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: AUTH_SERVICE_URL
+        value: https://parklink-auth-service.onrender.com
+      - key: PARKING_SERVICE_URL
+        value: https://parklink-parking-service.onrender.com
+      - key: PAYMENT_SERVICE_URL
+        value: https://parklink-payment-service.onrender.com
+      - key: BOOKING_SERVICE_URL
+        value: ""
+      - key: JWT_SECRET
+        fromService:
+          type: web
+          name: parklink-auth-service
+          envVarKey: JWT_SECRET
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: RABBITMQ_URL
+        value: ""
+      - key: EVENTS_EXCHANGE
+        value: parklink.events
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: UPSTREAM_TIMEOUT_SECONDS
+        value: "15"
+
+  # ---------------- admin-dashboard (static front-end) ----------------
+  - type: static
+    name: parklink-admin-dashboard
+    buildCommand: ""
+    staticPublishPath: ./admin-dashboard
+
+  # ---------------- mobile (Expo web build) ----------------
+  # Web version of the mobile app (expo-router + react-native-web already in
+  # mobile/package.json). This is NOT the installable Android/iOS app --
+  # that's a separate flow (EAS Build/Submit), unrelated to Render. Needs
+  # mobile/app.json's `web.output` set to "single" (SPA) so the exported
+  # bundle works with the rewrite rule below -- see DEPLOY.md.
+  - type: static
+    name: parklink-mobile-web
+    rootDir: mobile
+    buildCommand: npm install && npx expo export -p web
+    staticPublishPath: ./dist
+    envVars:
+      - key: EXPO_PUBLIC_API_URL
+        value: https://parklink-gateway.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
