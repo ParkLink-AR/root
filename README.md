@@ -6,14 +6,14 @@ Este es el repositorio raíz de ParkLink. Contiene la configuración global para
 
 ## Servicios
 
-| Servicio | Puerto | Submódulo | ¿Está en `docker compose up`? |
+| Servicio | Puerto (host) | Submódulo | ¿Está en `docker compose up`? |
 |---|---|---|---|
 | `gateway` | 8080 | [gateway](https://github.com/ParkLink-AR/gateway) | Sí |
 | `auth-service` | 8000 | [auth-service](https://github.com/ParkLink-AR/auth-service) | Sí |
 | `parking-service` | 3001 | [parking-service](https://github.com/ParkLink-AR/parking-service) | Sí |
 | `payment-service` | 8004 | [payment-service](https://github.com/ParkLink-AR/payment-service) | Sí |
+| `booking-service` | 8082 | [booking-service](https://github.com/ParkLink-AR/booking-service) | Sí |
 | `mobile` (app Expo) | 8081 por defecto (lo elige Expo) | [mobile](https://github.com/ParkLink-AR/mobile) | No, se corre aparte (ver [Conectar la app mobile](#conectar-la-app-mobile)) |
-| `booking-service` | — | [booking-service](https://github.com/ParkLink-AR/booking-service) | No todavía — ya tiene código (Go) y su propio `docker-compose.yml`/`Makefile`, pero no está enchufado al compose de la raíz |
 | `notifications-service` | — | [notifications-service](https://github.com/ParkLink-AR/notifications-service) | No todavía — sólo consume eventos de RabbitMQ, aún sin código |
 
 Todo pasa por el **gateway** (puerto 8080): mobile y cualquier cliente externo le pegan a él, nunca directo a un microservicio. El gateway verifica el JWT y reenvía la request al servicio correspondiente (agregando el header `x-user-id`).
