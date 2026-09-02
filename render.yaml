@@ -8,15 +8,17 @@
 # else here still applies).
 #
 # NOT included on purpose:
-#   - rabbitmq: nothing consumes the events it would carry yet
-#     (notifications-service has no code), and gateway/app/rabbitmq.py
-#     already degrades gracefully when RABBITMQ_URL is unreachable. Add it
-#     back the day notifications-service exists.
-#   - booking-service / notifications-service: no code yet, same as the
-#     local compose.yaml.
+#   - rabbitmq: Render has no managed RabbitMQ on the free plan. notifications-service
+#     and the gateway both take RABBITMQ_URL as `sync: false` -- point them at an
+#     external broker (e.g. CloudAMQP's free "Little Lemur" instance) or leave it
+#     empty (gateway degrades gracefully; notifications-service's consumer retries).
+#   - booking-service: no code deployed here yet, same as the local compose.yaml.
 #   - mobile: it's an Expo app, not something Render hosts. Point its
 #     EXPO_PUBLIC_API_URL at parklink-gateway's URL below when testing
 #     against this deploy.
+#   - Firebase: notifications-service needs a service-account JSON. Upload it as a
+#     Render Secret File and set GOOGLE_APPLICATION_CREDENTIALS to its path, or
+#     leave it empty to run the push sender in log-only mode.
 #
 # One free Postgres instance is shared by all three services (Render's free
 # plan allows one free Postgres per account) — see DEPLOY.md for the
@@ -179,6 +181,35 @@ services:
       - key: CORS_ORIGINS
         value: "*"
 
+  # ---------------- notifications-service ----------------
+  # Uses the shared Postgres instance (needs the `parklink_notif_db` database
+  # created manually first, same as parking-service -- see DEPLOY.md).
+  - type: web
+    name: parklink-notifications-service
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./notifications-service/Dockerfile
+    dockerContext: ./notifications-service
+    healthCheckPath: /livez
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: RABBITMQ_URL
+        sync: false
+      - key: EVENTS_EXCHANGE
+        value: parklink.events
+      - key: NOTIFICATIONS_QUEUE
+        value: notifications.events
+      - key: PARKING_SERVICE_URL
+        value: https://parklink-parking-service.onrender.com
+      # Path to the Firebase service-account JSON uploaded as a Render Secret
+      # File. Leave empty to run the push sender in log-only mode.
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false
+
   # ---------------- gateway ----------------
   - type: web
     name: parklink-gateway
@@ -199,6 +230,8 @@ services:
         value: https://parklink-payment-service.onrender.com
       - key: BOOKING_SERVICE_URL
         value: ""
+      - key: NOTIFICATIONS_SERVICE_URL
+        value: https://parklink-notifications-service.onrender.com
       - key: JWT_SECRET
         fromService:
           type: web
