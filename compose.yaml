@@ -178,6 +178,47 @@ services:
       booking-service:
         condition: service_started
 
+  # ---------------- notifications-service ----------------
+  db-notifications:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=parklink_notif
+      - POSTGRES_PASSWORD=parklink_notif
+      - POSTGRES_DB=parklink_notif_db
+    ports:
+      - "5436:5432"
+    volumes:
+      - parklink_notif_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parklink_notif -d parklink_notif_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  notifications-service:
+    build: ./notifications-service
+    ports:
+      - "8085:8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql://parklink_notif:parklink_notif@db-notifications:5432/parklink_notif_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - EVENTS_EXCHANGE=${EVENTS_EXCHANGE:-parklink.events}
+      - NOTIFICATIONS_QUEUE=${NOTIFICATIONS_QUEUE:-notifications.events}
+      - PARKING_SERVICE_URL=http://parking-service:3001
+      # Poné FIREBASE_CREDENTIALS_PATH=/run/secrets/firebase-service-account.json
+      # en tu .env cuando tengas el JSON de service account en
+      # ./notifications-service/secrets/. Vacío = modo log-only (no manda push
+      # reales, sólo loguea qué habría mandado).
+      - GOOGLE_APPLICATION_CREDENTIALS=${FIREBASE_CREDENTIALS_PATH:-}
+    volumes:
+      - ./notifications-service/secrets:/run/secrets:ro
+    depends_on:
+      db-notifications:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   # ---------------- gateway ----------------
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -202,6 +243,7 @@ services:
       - PARKING_SERVICE_URL=http://parking-service:3001
       - PAYMENT_SERVICE_URL=http://payment-service:8004
       - BOOKING_SERVICE_URL=http://booking-service:8080
+      - NOTIFICATIONS_SERVICE_URL=http://notifications-service:8000
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
@@ -216,6 +258,8 @@ services:
         condition: service_started
       booking-service:
         condition: service_started
+      notifications-service:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
 
@@ -224,4 +268,5 @@ volumes:
   parklink_parking_db_data:
   parklink_payment_db_data:
   parklink_booking_db_data:
+  parklink_notif_db_data:
   parklink_rabbitmq_data:
