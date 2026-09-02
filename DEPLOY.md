@@ -135,19 +135,12 @@ Render, cambian con el tiempo):
   de días antes de requerir upgrade a un plan pago — revisá la fecha en el
   dashboard apenas la crees.
 
-## 6. Bug pre-existente que vas a notar en el admin-dashboard
+## 6. ~~Bug pre-existente que vas a notar en el admin-dashboard~~ (arreglado)
 
 `admin-dashboard/api.js` le pega **directo** a `payment-service`
-(`CONFIG.PAYMENT_URL`), no a través del gateway. Pero
-`payment-service/src/app.js` no manda ningún header
-`Access-Control-Allow-Origin` — no usa el paquete `cors` ni lo setea a mano.
-Localmente esto no se nota tanto (mismo-ish origen), pero con
-`admin-dashboard` en `parklink-admin-dashboard.onrender.com` pegándole a
-`parklink-payment-service.onrender.com` (dominios distintos), el navegador
-va a bloquear la respuesta de `/api/payments/metrics` por CORS.
-
-No lo arreglé porque `payment-service` es un submódulo con su propio repo
-(el fix implica tocar código ahí y pushear) — si querés, decime y lo hago:
-agregar `app.use(cors())` (o algo más restrictivo con
-`CORS_ORIGINS=https://parklink-admin-dashboard.onrender.com`) en
-`payment-service/src/app.js`.
+(`CONFIG.PAYMENT_URL`), no a través del gateway. `payment-service` ahora
+manda `Access-Control-Allow-Origin` (paquete `cors`, ver
+`payment-service/src/app.js`), configurable con la env var `CORS_ORIGINS`
+(`PAYMENT_CORS_ORIGINS` en el `.env`/`render.yaml` de la raíz) — por defecto
+`*`, restringila a `https://parklink-admin-dashboard.onrender.com` en
+producción si querés cerrarlo más.

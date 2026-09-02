@@ -172,6 +172,7 @@ services:
       - DEFAULT_CURRENCY=${DEFAULT_CURRENCY:-ARS}
       - BOOKING_SERVICE_URL=http://booking-service:8080
       - BOOKING_SERVICE_AUTH_TOKEN=${BOOKING_SERVICE_AUTH_TOKEN:-}
+      - CORS_ORIGINS=${PAYMENT_CORS_ORIGINS:-*}
     depends_on:
       db-payment:
         condition: service_healthy
