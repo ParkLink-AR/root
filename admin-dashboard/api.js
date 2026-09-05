@@ -109,7 +109,7 @@ function buildMockMetrics() {
 
 async function fetchPaymentTotal(token) {
   const data = await safeFetch(
-    `${CONFIG.PAYMENT_URL}/api/payments/metrics`,
+    `${CONFIG.GATEWAY_URL}/payments/metrics`,
     { headers: authHeaders(token) }
   );
   return data ? parseFloat(data.totalAmount) || 0 : null;
@@ -118,7 +118,7 @@ async function fetchPaymentTotal(token) {
 async function fetchPaymentByPeriod(token, daysAgo) {
   const { from, to } = isoRange(daysAgo);
   const data = await safeFetch(
-    `${CONFIG.PAYMENT_URL}/api/payments/metrics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    `${CONFIG.GATEWAY_URL}/payments/metrics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     { headers: authHeaders(token) }
   );
   return data ? parseFloat(data.totalAmount) || 0 : null;
@@ -155,7 +155,7 @@ async function fetchWeeklyRevenue(token) {
     const to = new Date(from);
     to.setHours(23, 59, 59, 999);
     const data = await safeFetch(
-      `${CONFIG.PAYMENT_URL}/api/payments/metrics?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
+      `${CONFIG.GATEWAY_URL}/payments/metrics?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
       { headers: authHeaders(token) }
     );
     buckets.push({ label: days[from.getDay()], amount: data ? parseFloat(data.totalAmount) || 0 : 0 });
@@ -173,7 +173,7 @@ async function fetchMonthlyRevenue(token) {
     const from = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
     const to   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
     const data = await safeFetch(
-      `${CONFIG.PAYMENT_URL}/api/payments/metrics?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
+      `${CONFIG.GATEWAY_URL}/payments/metrics?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
       { headers: authHeaders(token) }
     );
     buckets.push({ label: monthNames[d.getMonth()], amount: data ? parseFloat(data.totalAmount) || 0 : 0 });

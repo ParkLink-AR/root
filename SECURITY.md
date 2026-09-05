@@ -1,6 +1,6 @@
 # Guía de Seguridad y Auditoría para Salida a Producción - ParkLink
 
-Este documento resume el análisis de seguridad exhaustivo de la arquitectura de microservicios de **ParkLink** (Gateway, Auth, Parking, Booking, Payment, Notifications y Mobile), identificando fortalezas, vulnerabilidades críticas para salida al mercado y un plan de acción detallado paso a paso.
+Este documento resume el análisis de seguridad exhaustivo de la arquitectura de microservicios de **ParkLink** (Gateway, Auth, Parking, Booking, Payment, Notifications y Mobile), identificando fortalezas, vulnerabilidades críticas para salida al mercado, medidas ya aplicadas y una **guía completa de opciones avanzadas para fortalecer al máximo la seguridad bajo el principio de Defense in Depth (Seguridad en Profundidad)**.
 
 ---
 
@@ -9,91 +9,112 @@ Este documento resume el análisis de seguridad exhaustivo de la arquitectura de
 ### Lo que está bien resuelto (Fortalezas)
 1. **Contraseñas y Tokens:** PBKDF2-SHA256 con passlib, hashing SHA-256 de refresh tokens y códigos OTP en base de datos.
 2. **Gateway Centralizado:** Punto de entrada único que valida JWTs y propaga el `x-user-id` a los microservicios downstream.
-3. **Manejo de Tiempos Criptográficos:** Uso de `timingSafeEqual` en verificación de claves internas (`INTERNAL_SERVICE_KEY`).
+3. **Manejo de Tiempos Criptográficos:** Uso de `timingSafeEqual` en verificación de claves internas (`INTERNAL_SERVICE_KEY`) y webhooks de pago.
 4. **Almacenamiento Seguro Móvil:** Uso de `expo-secure-store` en la app móvil para tokens de sesión.
 5. **Rate Limiting OTP:** Cooldown de 60 segundos entre reenvíos de códigos de verificación.
 
 ---
 
-## 2. Vulnerabilidades Críticas para Salida al Mercado
+## 2. Medidas de Seguridad Ya Implementadas en el Repositorio
 
-### 🚨 1. Aislamiento de Red y Suplantación de Identidad (`x-user-id`)
-* **Problema:** Microservicios como `parking-service`, `booking-service` y `notifications-service` confían ciegamente en el header HTTP `x-user-id`. En el `compose.yaml` y en servicios en la nube no aislados, si los puertos de estos microservicios (`3001`, `8080`, `8085`, `8004`) están expuestos a Internet, cualquier atacante puede llamar directo al servicio inyectando cualquier `x-user-id` arbitrario (ej: saltarse la autenticación, suplantar dueños de cocheras o clientes).
-* **Solución:**
-  - Cerrar todos los puertos de los microservicios hacia el exterior (solo exponer el puerto del Gateway `8080` / `443` y los webhooks públicos).
-  - Usar una red privada interna (VPC / Docker network interna no expuesta).
-  - Validar un secreto compartido de Gateway (`X-Gateway-Secret`) o implementar **mTLS** (Mutual TLS) entre el gateway y los microservicios.
+- [x] **Sanitización de Headers en Gateway:** `gateway/app/proxy.py` elimina `x-user-id` y `x-internal-key` de cualquier petición entrante externa para prevenir suplantación de identidad (spoofing).
+- [x] **Security Headers HTTP (OWASP):** Inyección automática de `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`, `Referrer-Policy` y `Permissions-Policy` en `gateway/app/middleware.py`.
+- [x] **Rate Limiting en Gateway:** `RateLimitMiddleware` con ventana deslizante por IP con cupos reducidos en `/auth/login`, `/auth/register`, OTPs y `/payments/create-preference`.
+- [x] **Validación Fail-Fast en Producción:** `gateway`, `auth-service` y `payment-service` bloquean el inicio en `ENVIRONMENT=production` si las claves son menores a 32 caracteres o contienen valores por defecto inseguros.
 
 ---
 
-### 🚨 2. Claves y Secretos (Keys & Secrets Management)
-* **Problema:** 
-  - `JWT_SECRET` simétrico compartido entre `auth-service`, `gateway` y `payment-service`. Si uno se ve comprometido, toda la infraestructura queda expuesta para forjar tokens válidos.
-  - Valores por defecto débiles en código (`dev-secret-change-me`, `dev-internal-key-change-me`, credenciales de base de datos como `parklink_auth`/`parklink_auth`).
-  - No hay rotación automática de llaves ni validación estricta de variables en startup en modo producción.
-* **Solución:**
-  - **Migrar a Asymmetric JWT (RS256 o EdDSA / ES256):** `auth-service` firma con clave privada; `gateway`, `payment-service` y otros solo verifican con la clave pública (JWKS).
-  - Usar un gestor de secretos (HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager o Render Secret Files/Env Groups).
-  - Bloquear el arranque en producción (`ENVIRONMENT=production`) si los secretos contienen substrings como `dev-`, `change-me`, `REEMPLAZAR` o tienen longitud menor a 32 caracteres.
+## 3. Opciones para Fortalecer la Seguridad al Máximo (Defense in Depth / Zero Trust)
+
+A continuación se detallan las opciones y patrones técnicos recomendados ordenados por capa arquitectónica para llevar el sistema a un estándar de grado bancario / fintech:
+
+### Capa 1: Autenticación y Criptografía Asimétrica (Zero Trust Keys)
+1. **Migración a JWT Asimétrico (RS256 / ES256 / EdDSA):**
+   - **Esquema:** `auth-service` custodia una **clave privada (RSA/ECDSA)** y es el único componente capaz de firmar tokens.
+   - **Verificación:** El Gateway, `payment-service` y cualquier microservicio downstream consumen exclusivamente la **clave pública** (o un endpoint estándar JWKS `/.well-known/jwks.json`).
+   - **Beneficio:** Si un atacante compromete el Gateway o un microservicio interno, **jamás podrá forjar ni firmar tokens falsos**.
+2. **Firmado de Peticiones Internas (Gateway Signature Token / HMAC):**
+   - El Gateway, además de propagar `x-user-id`, firma una cabecera interna `X-Gateway-Signature` o un JWT interno de corta duración (TTL de 30 segundos) con `aud: [microservicio]` y `sub: [user_id]`.
+   - Cada microservicio valida esta firma antes de procesar la solicitud, garantizando que nadie dentro de la red interna pueda saltarse al Gateway.
 
 ---
 
-### 🚨 3. Falta de Rate Limiting y Protección DDoS/Brute-Force en el Gateway
-* **Problema:** El Gateway no tiene limitador de tasa de peticiones (Rate Limiting) global ni por IP/endpoint. Rutas como `/auth/login`, `/auth/register`, `/auth/password-reset/confirm` y `/payments/create-preference` están abiertas a ataques de fuerza bruta, credential stuffing y denegación de servicio (DoS).
-* **Solución:**
-  - Implementar middleware de Rate Limiting en el Gateway (usando Redis o memoria con ventana deslizante/token bucket).
-  - Proteger `/auth/login` a máx. 5 intentos por minuto por IP/usuario.
-  - Colocar Cloudflare (WAF + DDoS Protection + SSL Termination + Bot Management) delante del Gateway.
+### Capa 2: Aislamiento de Red y Cifrado Este-Oeste (Network Layer)
+1. **Redes Privadas / VPC Seguras:**
+   - Cerrar el 100% de los puertos externos de las bases de datos (Postgres `5432-5436`), RabbitMQ (`5672`, `15672`) y microservicios downstream (`3001`, `8000`, `8004`, `8082`, `8085`).
+   - El único contenedor/servicio con puerto público es el Gateway (`8080` / `443`).
+2. **mTLS (Mutual TLS) entre Microservicios:**
+   - En infraestructuras como Kubernetes o Docker Swarm con Service Mesh (Linkerd / Istio) o Envoy proxy, el tráfico interno va cifrado y autenticado con certificados x509 mutuos.
+3. **Restricción Estricta de CORS:**
+   - En producción, configurar `CORS_ORIGINS` para aceptar únicamente el dominio exacto del dashboard de administración (ej: `https://admin.parklink.com.ar`) y denegar comodines `*`.
 
 ---
 
-### 🚨 4. Configuración Permisiva de CORS
-* **Problema:** El Gateway y `payment-service` tienen `CORS_ORIGINS=*` por defecto.
-* **Solución:**
-  - En producción, restringir los orígenes permitidos estrictamente al dominio de la web/dashboard de administración y cerrar CORS para clientes móviles nativos (o restringir headers).
+### Capa 3: Control de Acceso y Autorización a Nivel de Objeto (BOLA / IDOR Defense)
+1. **Validación de Propiedad en Cada Operación:**
+   - Nunca confiar en que el ID del objeto en la URL pertenece al solicitante. En cada `UPDATE`, `DELETE` o `GET` sensible:
+     - `parking-service`: Comprobar `WHERE id = :spot_id AND owner_id = :caller_user_id`.
+     - `booking-service`: Comprobar que el usuario sea el inquilino (`user_id`) o el propietario de la cochera (`spot.owner_id`).
+     - `payment-service`: Impedir que un usuario consulte transacciones ajenas por `external_reference` si no es el pagador o el dueño de la reserva.
+2. **Modelado de Roles y Permisos (RBAC):**
+   - Incorporar en el JWT y en la base de datos de Auth roles explícitos (`role: user | owner | admin | auditor`) para que los endpoints administrativos verifiquen permisos a nivel de decorador/middleware en cada microservicio.
 
 ---
 
-### 🚨 5. Validación de Webhooks de Pago (Mercado Pago)
-* **Problema:** La ruta `/payments/webhook` recibe notificaciones sin autenticación de usuario. Si las credenciales `MERCADOPAGO_WEBHOOK_SECRET` no se configuran adecuadamente o no se valida la firma HMAC del header `x-signature`, un atacante puede falsificar aprobaciones de pago.
-* **Solución:**
-  - Forzar la validación estricta de la firma HMAC de Mercado Pago en cada webhook antes de cambiar el estado de reservas o pagos.
-  - Rechazar cualquier webhook con código 401/403 si la firma no coincide o si no hay secret configurada.
+### Capa 4: Revocación de Sesiones y Cache Distribuido
+1. **Invalidación Instantánea con Redis (Token Blacklist / Versioning):**
+   - Actualmente los Access Tokens duran 15 minutos sin consultar base de datos.
+   - **Opción A (Token Versioning):** Agregar un `token_version` al payload del JWT y mantener un contador en Redis por usuario. Si el usuario hace logout, cambia contraseña o es bloqueado, se incrementa su `token_version` y cualquier token anterior queda rechazado al instante.
+   - **Opción B (Event-Driven Revocation):** Publicar eventos RabbitMQ `auth.session_revoked` consumidos por el Gateway para guardar el `jti` (JWT ID) en una lista negra en memoria/Redis durante el tiempo remanente del TTL.
 
 ---
 
-### 🚨 6. Autorización a Nivel de Objeto (BOLA / IDOR)
-* **Problema:** En varios endpoints, si bien se valida que el usuario esté autenticado (`x-user-id`), se debe auditar que cada microservicio verifique la propiedad del recurso:
-  - ¿Puede un usuario modificar o borrar una cochera que no le pertenece? (`parking-service`)
-  - ¿Puede un usuario cancelar o ver reservas de otro? (`booking-service`)
-  - ¿Puede un usuario consultar pagos ajenos pasando otro ID o external reference? (`payment-service`)
-* **Solución:**
-  - Garantizar pruebas automáticas de autorización IDOR en cada microservicio donde siempre se compare `resource.owner_id == caller_user_id`.
+### Capa 5: Seguridad en la App Móvil (Mobile App Hardening)
+1. **SSL/TLS Certificate Pinning:**
+   - En la app Expo/React Native, fijar las huellas SHA-256 de los certificados SSL del Gateway para prevenir ataques de intermediario (Man-in-the-Middle) en redes Wi-Fi públicas no seguras.
+2. **Detección de Root/Jailbreak y Entorno Emulado:**
+   - Utilizar librerías como `react-native-device-info` o `expo-crypto` / SafetyNet / Play Integrity para alertar o restringir pagos en dispositivos rooteados o adulterados.
+3. **Biometría para Operaciones Críticas:**
+   - Exigir `expo-local-authentication` (FaceID / Fingerprint) antes de autorizar pagos o modificar contraseñas y teléfonos.
 
 ---
 
-### 🚨 7. Revocación de Sesiones y Blacklist de Tokens
-* **Problema:** El Gateway decodifica el JWT de forma estática (firma + expiración). Si un usuario cambia su contraseña, hace logout o su cuenta es suspendida/eliminada, su Access Token sigue siendo válido en el Gateway hasta que expire.
-* **Solución:**
-  - Mantener tiempos de expiración cortos para Access Token (ej: 5 a 15 minutos).
-  - Para revocación instantánea: implementar un canal de invalidación en Redis compartido o evento RabbitMQ `user.session_revoked` que el Gateway consulte en memoria/cache.
+### Capa 6: Perímetro, WAF y Monitoreo (Edge & Observability)
+1. **Cloudflare WAF + Bot Management + DDoS Shield:**
+   - Colocar Cloudflare frente al dominio del Gateway para mitigar ataques volumetricos L3/L4/L7, bloquear scrapers y forzar HTTPS con TLS 1.3.
+2. **Sanitización de Logs y PII (Data Masking):**
+   - Implementar filtros en loggers para enmascarar automáticamente tarjetas, contraseñas, tokens JWT, DNIs y teléfonos (`[REDACTED]`).
+3. **Auditoría Continua de Vulnerabilidades en CI/CD:**
+   - Integrar en GitHub Actions:
+     - `pip-audit` / `safety` (Python)
+     - `npm audit` / `snyk` (Node.js & Mobile)
+     - `govulncheck` (Go / Booking Service)
+     - `Trivy` (Escaneo de vulnerabilidades en imágenes Docker)
 
 ---
 
-### 🚨 8. Headers de Seguridad HTTP y OWASP Top 10
-* **Problema:** El Gateway no inyecta headers de seguridad estándar (HSTS, Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy).
-* **Solución:**
-  - Agregar un middleware de Security Headers en el Gateway (`gateway/app/middleware.py`).
+## 4. Matriz de Prioridad de Implementación
+
+| Medida de Seguridad | Nivel de Complejidad | Impacto en Seguridad | Recomendado para |
+| :--- | :---: | :---: | :--- |
+| **Aislamiento de puertos en Cloud/VPC** | Bajo | 🔴 Crítico | Día 1 de Despliegue |
+| **Secrets Reales en Gestor (Vault/Render)** | Bajo | 🔴 Crítico | Día 1 de Despliegue |
+| **Validación de Firma HMAC en Webhooks MP** | Bajo | 🔴 Crítico | Inmediato |
+| **JWT Asimétrico (RS256 / ES256)** | Medio | 🟠 Alto | Fase 1 Pre-Lanzamiento |
+| **Cloudflare WAF + SSL Pinning en App** | Medio | 🟠 Alto | Lanzamiento en Stores |
+| **Revocación Instantánea de Sesiones (Redis)** | Medio | 🟡 Medio | Post-Lanzamiento |
+| **mTLS / Service Mesh Interno** | Alto | 🟡 Medio | Escalamiento / Kubernetes |
 
 ---
 
-## 3. Checklist de Implementación para Salir al Mercado
+## 5. Checklist para Salida al Mercado
 
-- [ ] **Red:** Aislar la red interna: solo el Gateway expone puertos hacia Internet.
-- [ ] **Secretos:** Generar contraseñas y secrets criptográficos aleatorios de alta entropía (mínimo 32 bytes en base64 / hex).
-- [ ] **JWT:** Migrar a algoritmo asimétrico (RS256 / ES256) con clave privada exclusiva en `auth-service`.
-- [ ] **WAF & Rate Limiting:** Añadir Cloudflare + rate limiting en el Gateway.
-- [ ] **Webhooks:** Activar validación criptográfica de firmas HMAC en `payment-service`.
-- [ ] **Logs y Auditoría:** Asegurar que ningún log contenga contraseñas, tokens JWT, números de tarjetas o datos personales (PII).
-- [ ] **Validación de Entorno:** Fail-fast al arrancar en producción si faltan variables o si usan valores por defecto.
-- [ ] **Auditoría de Dependencias:** Ejecutar `pip-audit` / `safety`, `npm audit` y `govulncheck` en CI/CD.
+- [x] Sanitización de headers anti-spoofing en Gateway.
+- [x] Security headers HTTP configurados en Gateway.
+- [x] Rate limiting en rutas sensibles implementado.
+- [x] Bloqueo fail-fast en modo producción para claves inseguras.
+- [ ] Aislamiento de red: solo el Gateway expone puertos hacia Internet.
+- [ ] Generación de secretos criptográficos aleatorios (mínimo 32 bytes).
+- [ ] Credenciales de producción de Mercado Pago configuradas con firma de webhooks obligatoria.
+- [ ] Cloudflare configurado con terminación SSL y WAF activo.
+- [ ] Auditoría de dependencias y escaneo de imágenes Docker en CI/CD.

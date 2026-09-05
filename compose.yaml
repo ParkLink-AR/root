@@ -16,8 +16,7 @@ services:
       - POSTGRES_USER=parklink_auth
       - POSTGRES_PASSWORD=parklink_auth
       - POSTGRES_DB=parklink_auth_db
-    ports:
-      - "5433:5432"
+    # Internal database: not exposed to host machine
     volumes:
       - parklink_auth_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,8 +27,7 @@ services:
 
   auth-service:
     build: ./auth-service
-    ports:
-      - "8000:8000"
+    # Internal microservice: all client traffic routes through gateway:8080
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql://parklink_auth:parklink_auth@db-auth:5432/parklink_auth_db
@@ -63,8 +61,7 @@ services:
       - POSTGRES_USER=parklink
       - POSTGRES_PASSWORD=parklink
       - POSTGRES_DB=parking_service
-    ports:
-      - "5432:5432"
+    # Internal database: not exposed to host machine
     volumes:
       - parklink_parking_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -75,8 +72,7 @@ services:
 
   parking-service:
     build: ./parking-service
-    ports:
-      - "3001:3001"
+    # Internal microservice: all client traffic routes through gateway:8080
     environment:
       - DB_HOST=db-parking
       - DB_PORT=5432
@@ -104,8 +100,7 @@ services:
       - POSTGRES_USER=bookinguser
       - POSTGRES_PASSWORD=bookingpass
       - POSTGRES_DB=booking_db
-    ports:
-      - "5435:5432"
+    # Internal database: not exposed to host machine
     volumes:
       - parklink_booking_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -116,8 +111,7 @@ services:
 
   booking-service:
     build: ./booking-service
-    ports:
-      - "8082:8080"
+    # Internal microservice: all client traffic routes through gateway:8080
     environment:
       - HTTP_PORT=8080
       - DB_DSN=postgres://bookinguser:bookingpass@db-booking:5432/booking_db?sslmode=disable
@@ -141,8 +135,7 @@ services:
       - POSTGRES_USER=user_payment
       - POSTGRES_PASSWORD=pass_payment
       - POSTGRES_DB=payment_db
-    ports:
-      - "5434:5432"
+    # Internal database: not exposed to host machine
     volumes:
       - parklink_payment_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -153,8 +146,7 @@ services:
 
   payment-service:
     build: ./payment-service
-    ports:
-      - "8004:8004"
+    # Internal microservice: all client traffic routes through gateway:8080
     environment:
       - PORT=8004
       - DATABASE_URL=postgresql://user_payment:pass_payment@db-payment:5432/payment_db
@@ -193,8 +185,7 @@ services:
       - POSTGRES_USER=parklink_notif
       - POSTGRES_PASSWORD=parklink_notif
       - POSTGRES_DB=parklink_notif_db
-    ports:
-      - "5436:5432"
+    # Internal database: not exposed to host machine
     volumes:
       - parklink_notif_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -205,8 +196,7 @@ services:
 
   notifications-service:
     build: ./notifications-service
-    ports:
-      - "8085:8000"
+    # Internal microservice: all client traffic routes through gateway:8080
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql://parklink_notif:parklink_notif@db-notifications:5432/parklink_notif_db
