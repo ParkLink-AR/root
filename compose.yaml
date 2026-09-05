@@ -151,6 +151,7 @@ services:
       - PORT=8004
       - DATABASE_URL=postgresql://user_payment:pass_payment@db-payment:5432/payment_db
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
       # Compartida con booking-service: protege POST /internal/refund-by-payment,
       # que no pasa por el gateway (ver por qué en payment-service/src/app.js).
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
@@ -244,7 +245,9 @@ services:
       - BOOKING_SERVICE_URL=http://booking-service:8080
       - NOTIFICATIONS_SERVICE_URL=http://notifications-service:8000
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - EVENTS_EXCHANGE=${EVENTS_EXCHANGE:-parklink.events}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
