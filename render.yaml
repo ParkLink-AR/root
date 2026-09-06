@@ -253,22 +253,3 @@ services:
     name: parklink-admin-dashboard
     buildCommand: ""
     staticPublishPath: ./admin-dashboard
-
-  # ---------------- mobile (Expo web build) ----------------
-  # Web version of the mobile app (expo-router + react-native-web already in
-  # mobile/package.json). This is NOT the installable Android/iOS app --
-  # that's a separate flow (EAS Build/Submit), unrelated to Render. Needs
-  # mobile/app.json's `web.output` set to "single" (SPA) so the exported
-  # bundle works with the rewrite rule below -- see DEPLOY.md.
-  - type: static
-    name: parklink-mobile-web
-    rootDir: mobile
-    buildCommand: npm install && npx expo export -p web
-    staticPublishPath: ./dist
-    envVars:
-      - key: EXPO_PUBLIC_API_URL
-        value: https://parklink-gateway.onrender.com
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
