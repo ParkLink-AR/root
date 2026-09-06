@@ -34,7 +34,7 @@ services:
   # ---------------- auth-service ----------------
   - type: web
     name: parklink-auth-service
-    env: docker
+    runtime: docker
     plan: free
     region: oregon
     dockerfilePath: ./auth-service/Dockerfile
@@ -89,7 +89,7 @@ services:
   # image the local compose.yaml uses, but it does support the extension).
   - type: web
     name: parklink-parking-service
-    env: docker
+    runtime: docker
     plan: free
     region: oregon
     dockerfilePath: ./parking-service/Dockerfile
@@ -142,7 +142,7 @@ services:
   # ---------------- payment-service ----------------
   - type: web
     name: parklink-payment-service
-    env: docker
+    runtime: docker
     plan: free
     region: oregon
     dockerfilePath: ./payment-service/Dockerfile
@@ -186,7 +186,7 @@ services:
   # created manually first, same as parking-service -- see DEPLOY.md).
   - type: web
     name: parklink-notifications-service
-    env: docker
+    runtime: docker
     plan: free
     region: oregon
     dockerfilePath: ./notifications-service/Dockerfile
@@ -213,7 +213,7 @@ services:
   # ---------------- gateway ----------------
   - type: web
     name: parklink-gateway
-    env: docker
+    runtime: docker
     plan: free
     region: oregon
     dockerfilePath: ./gateway/Dockerfile
@@ -249,7 +249,8 @@ services:
         value: "15"
 
   # ---------------- admin-dashboard (static front-end) ----------------
-  - type: static
+  - type: web
+    runtime: static
     name: parklink-admin-dashboard
     buildCommand: ""
     staticPublishPath: ./admin-dashboard
