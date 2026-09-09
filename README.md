@@ -14,7 +14,7 @@ Este es el repositorio raíz de ParkLink. Contiene la configuración global para
 | `payment-service` | 8004 | [payment-service](https://github.com/ParkLink-AR/payment-service) | Sí |
 | `booking-service` | 8082 | [booking-service](https://github.com/ParkLink-AR/booking-service) | Sí |
 | `mobile` (app Expo) | 8081 por defecto (lo elige Expo) | [mobile](https://github.com/ParkLink-AR/mobile) | No, se corre aparte (ver [Conectar la app mobile](#conectar-la-app-mobile)) |
-| `notifications-service` | — | [notifications-service](https://github.com/ParkLink-AR/notifications-service) | No todavía — sólo consume eventos de RabbitMQ, aún sin código |
+| `notifications-service` | — (interno) | [notifications-service](https://github.com/ParkLink-AR/notifications-service) | Sí — consume `booking.*` de RabbitMQ y manda las push por FCM (ver [Push notifications](#push-notifications)) |
 
 Todo pasa por el **gateway** (puerto 8080): mobile y cualquier cliente externo le pegan a él, nunca directo a un microservicio. El gateway verifica el JWT y reenvía la request al servicio correspondiente (agregando el header `x-user-id`).
 
@@ -106,6 +106,49 @@ npx expo start
 ```
 
 `EXPO_PUBLIC_API_URL` es la única variable que necesita, y tiene que apuntar al **gateway** (no a un microservicio directo). El valor por default (`http://localhost:8080`) funciona tal cual para web y simulador iOS corriendo en la misma máquina que `docker compose`. Para emulador Android usá `http://10.0.2.2:8080`; para un dispositivo físico, la IP LAN de la máquina que corre Docker (ej. `http://192.168.1.50:8080`), con el celular en la misma red — el detalle completo está en `mobile/.env.example`.
+
+Para push notifications (development build, no Expo Go) usá `npx expo run:android` / `npx expo run:ios` en vez de `npx expo start` — ver [Push notifications](#push-notifications).
+
+---
+
+## Push notifications
+
+`notifications-service` consume del bus RabbitMQ y manda dos push por FCM:
+
+| Evento (lo publica `booking-service`) | Push a | Título |
+|---|---|---|
+| `booking.pending_approval` — se pagó, falta que el dueño confirme | **propietario** | 🔔 Tenés una reserva para confirmar |
+| `booking.confirmed` — el dueño aprobó (o la cochera es instant-booking) | **conductor** | ✅ ¡Reserva confirmada! |
+
+### Ya viene configurado (proyecto privado)
+
+Las credenciales de Firebase (proyecto `parklink-app`) están **commiteadas en los submódulos**:
+
+- `notifications-service/secrets/firebase-service-account.json` — se montea en el contenedor; `docker compose up` lo toma solo, sin tocar el `.env`. En log-only si querés: `FIREBASE_CREDENTIALS_PATH=` (vacío) en el `.env`.
+- `mobile/google-services.json` (Android) y `mobile/GoogleService-Info.plist` (iOS) — para que el build compile sin bajar nada.
+
+> ⚠️ Si estos repos se hacen públicos, rotá las tres credenciales.
+
+### Probar en Android (funciona el circuito completo, gratis)
+
+```bash
+make up                       # backend
+cd mobile && npm install
+npx expo run:android          # emulador con Google Play, o device
+# login -> se registra el token FCM -> reservás, pagás -> push al dueño
+#       -> el dueño aprueba -> push al conductor
+```
+
+Requiere: JDK 17 (no 21+), Android SDK, emulador con **Google Play** (FCM necesita Play Services). En **Windows** además hace falta un workaround de CMake/rutas largas — ver `mobile/PUSH_NOTIFICATIONS.md`. En macOS/Linux no.
+
+### Probar en iOS
+
+- **Gratis** (solo la parte de la app, en una Mac): `cd mobile && npx expo run:ios` y después
+  `./scripts/push-sim.sh ios pending` / `./scripts/push-sim.sh ios confirmed`.
+  `xcrun simctl push` inyecta la notificación local → ves que se muestre y que el tap navegue. **No** prueba el registro del token ni el envío del backend (FCM/APNs).
+- **Circuito real** (backend → FCM → APNs → device): necesita **Apple Developer Program (US$99/año)** para la APNs Auth Key (subirla a Firebase Console → Cloud Messaging) + **Mac Apple Silicon**. El `.p8` no se commitea.
+
+Detalle completo (config plugins, canal Android, foreground vs background, toolchain): **`mobile/PUSH_NOTIFICATIONS.md`**.
 
 ---
 
@@ -209,8 +252,14 @@ El flujo de reserva tiene varios pasos encadenados. Si alguno falla el siguiente
   → Usuario paga en Mercado Pago
   → MP llama al webhook: POST /api/payments/webhook
   → payment-service confirma la reserva: POST /bookings/{bookingId}/confirm
+      · cochera instant-booking  → CONFIRMED         → evento booking.confirmed        → push al conductor
+      · cochera con aprobación   → PENDING_OWNER_APPROVAL → evento booking.pending_approval → push al propietario
   → MP redirige al deep link parklink://payment/success
   → La app cierra el WebBrowser y navega a la pantalla de reservas
+
+[Mobile] (owner)/bookings/[id].tsx   -- solo si quedó PENDING_OWNER_APPROVAL
+  → El propietario toca "Aceptar": POST /bookings/{id}/approve  (booking-service)
+      → CONFIRMED → evento booking.confirmed → push al conductor
 ```
 
 ### Errores frecuentes
