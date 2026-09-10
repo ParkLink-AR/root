@@ -1,12 +1,14 @@
-# Levanta todo el ecosistema de ParkLink que está funcionando hoy:
-# auth-service, parking-service, booking-service, payment-service y el
-# gateway (+ sus bases de datos y RabbitMQ).
-# notifications-service todavía no tiene código — agregalo cuando exista,
-# siguiendo el mismo patrón que los demás.
+# Levanta todo el ecosistema de ParkLink:
+# auth-service, parking-service, booking-service, payment-service,
+# notifications-service y el gateway (+ sus bases de datos y RabbitMQ).
 #
 # Uso:
 #   cp .env.example .env   # completar JWT_SECRET, BREVO_API_KEY, credenciales de Mercado Pago y R2 (ver DEPLOY.md)
 #   docker compose up --build
+#
+# Push notifications: el JSON de service-account de Firebase va commiteado en
+# ./notifications-service/secrets/ y se montea en el contenedor, así que las
+# push funcionan sin config extra (ver notifications-service/../mobile/PUSH_NOTIFICATIONS.md).
 
 services:
   # ---------------- auth-service ----------------
@@ -205,11 +207,10 @@ services:
       - EVENTS_EXCHANGE=${EVENTS_EXCHANGE:-parklink.events}
       - NOTIFICATIONS_QUEUE=${NOTIFICATIONS_QUEUE:-notifications.events}
       - PARKING_SERVICE_URL=http://parking-service:3001
-      # Poné FIREBASE_CREDENTIALS_PATH=/run/secrets/firebase-service-account.json
-      # en tu .env cuando tengas el JSON de service account en
-      # ./notifications-service/secrets/. Vacío = modo log-only (no manda push
-      # reales, sólo loguea qué habría mandado).
-      - GOOGLE_APPLICATION_CREDENTIALS=${FIREBASE_CREDENTIALS_PATH:-}
+      # The service-account JSON is committed at ./notifications-service/secrets/
+      # (private repo) and mounted below, so push works out of the box. Override
+      # with FIREBASE_CREDENTIALS_PATH= (empty) in your .env to force log-only.
+      - GOOGLE_APPLICATION_CREDENTIALS=${FIREBASE_CREDENTIALS_PATH:-/run/secrets/firebase-service-account.json}
     volumes:
       - ./notifications-service/secrets:/run/secrets:ro
     depends_on:
