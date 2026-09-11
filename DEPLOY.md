@@ -11,7 +11,7 @@ Todo queda armado solo al importar el Blueprint -- bases de datos, PostGIS,
 y todos los secretos compartidos entre servicios (JWT, claves internas,
 Brevo, Cloudflare R2, Mercado Pago). Dos cosas no se pueden autoprovisionar
 porque son cuentas de terceros que tenés que crear vos: RabbitMQ (paso 3) y
-WhatsApp Cloud API para el código de verificación de teléfono (paso 4).
+Twilio para el código de verificación de teléfono por SMS (paso 4).
 
 ## 1. Dar acceso a Render a los submódulos
 
@@ -57,30 +57,20 @@ consume para mandar las push). Render no tiene un plan gestionado gratis:
 Sin este paso, `booking-service` no arranca (se cae con `rabbitmq dial`)
 -- es el primer servicio a revisar si el deploy falla.
 
-## 4. WhatsApp Cloud API (código de verificación de teléfono)
+## 4. Twilio (código de verificación de teléfono por SMS)
 
 `auth-service` manda el código de 6 dígitos del registro (y del cambio de
-teléfono) por WhatsApp, vía la Cloud API de Meta (ver
-`auth-service/app/utils/whatsapp.py`) -- es la API oficial de Meta, directo,
-sin intermediarios de terceros.
+teléfono) por SMS vía Twilio (ver `auth-service/app/utils/sms.py`).
 
-1. Creá una app en https://developers.facebook.com/apps (tipo "Business") y
-   agregale el producto **WhatsApp**.
-2. **WhatsApp → API Setup** te da un **Phone Number ID** y un token temporal
-   (dura 24h, sirve para probar). Para producción, generá uno permanente:
-   **Business Settings → Users → System Users** → creá uno, asignale el
-   activo de WhatsApp, y generá un token sin fecha de expiración.
-3. **WhatsApp Manager → Account tools → Message templates** → creá una
-   plantilla con categoría **Authentication** (Meta escribe el texto del
-   mensaje solo -- "\<código\> es tu código de verificación" -- vos sólo
-   elegís nombre, idioma y opciones como el pie con el tiempo de expiración).
-   La aprobación suele tardar minutos, no días.
+1. Creá una cuenta en https://console.twilio.com (no pide verificación de
+   negocio ni aprobación de plantillas -- anda apenas cargás una tarjeta).
+2. Comprá un número de teléfono (Phone Numbers → Buy a number, ~1.15 USD/mes)
+   con capacidad SMS.
+3. Copiá el **Account SID** y el **Auth Token** desde el dashboard principal.
 4. Dashboard de Render → `parklink-auth-service` → pestaña **Environment**:
-   - `WHATSAPP_ACCESS_TOKEN`: el token del paso 2.
-   - `WHATSAPP_PHONE_NUMBER_ID`: el ID del paso 2.
-   - Si tu plantilla no se llama `otp_code` o no está en `es_AR`, actualizá
-     también `WHATSAPP_TEMPLATE_NAME`/`WHATSAPP_TEMPLATE_LANG` (ya vienen
-     seteados en el Blueprint, pero apuntando a esos valores por default).
+   - `TWILIO_ACCOUNT_SID`: el SID del paso 3.
+   - `TWILIO_AUTH_TOKEN`: el token del paso 3.
+   - `TWILIO_FROM_NUMBER`: el número del paso 2 (formato `+1...`).
 5. Cambiá `SKIP_PHONE_VERIFICATION` a `"false"` en el mismo servicio (el
    Blueprint la trae en `"true"` para no bloquear el registro hasta que
    completes los pasos de arriba) y sincronizá.
@@ -93,7 +83,9 @@ sin intermediarios de terceros.
 Sin los pasos 4-5, el registro no se rompe: `auth-service` cae en modo
 log-only (loguea el código en vez de mandarlo), igual que en local sin estas
 variables -- pero ningún usuario real puede completar el paso de teléfono,
-porque el código nunca le llega.
+porque el código nunca le llega. Ojo con el saldo: Twilio cobra ~0.10 USD por
+SMS a números argentinos, descontado de un saldo prepago que cargás con
+tarjeta -- si se agota, deja de mandar (no te cobra de más solo).
 
 ## 5. Mercado Pago: credenciales reales
 
@@ -133,8 +125,8 @@ credenciales primero** (Brevo → Settings → API Keys; Cloudflare → R2 →
 Manage API Tokens; Mercado Pago → Developers → Credenciales) y actualizá
 `render.yaml` con los valores nuevos antes de sacarlo a la luz.
 
-`WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` quedan afuera de esa
-lista a propósito -- van como `sync: false` (paso manual, sección 4) en vez
-de embebidos, porque no los tengo para poner acá. Si en algún momento los
-pegás directo en el YAML en vez de en el dashboard, aplicá el mismo criterio:
-rotalos antes de hacer público el repo.
+`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` quedan afuera
+de esa lista a propósito -- van como `sync: false` (paso manual, sección 4)
+en vez de embebidos, porque no los tengo para poner acá. Si en algún momento
+los pegás directo en el YAML en vez de en el dashboard, aplicá el mismo
+criterio: rotalos antes de hacer público el repo.

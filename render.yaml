@@ -87,32 +87,26 @@ services:
         value: no-reply@mail.parklink.com.ar
       - key: EMAIL_FROM_NAME
         value: ParkLink Argentina
-      # WhatsApp Cloud API (Meta) -- credenciales de tu app en
-      # https://developers.facebook.com/apps y plantilla AUTHENTICATION
-      # aprobada en WhatsApp Manager (ver auth-service/.env.example para el
-      # paso a paso). No se pueden autoprovisionar: son tuyas, pegalas en el
-      # dashboard de Render (parklink-auth-service -> Environment).
-      - key: WHATSAPP_ACCESS_TOKEN
+      # Twilio (SMS) -- credenciales de tu cuenta en
+      # https://console.twilio.com. No se pueden autoprovisionar: son tuyas,
+      # pegalas en el dashboard de Render (parklink-auth-service -> Environment).
+      - key: TWILIO_ACCOUNT_SID
         sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
+      - key: TWILIO_AUTH_TOKEN
         sync: false
-      - key: WHATSAPP_TEMPLATE_NAME
-        value: otp_code
-      - key: WHATSAPP_TEMPLATE_LANG
-        value: es_AR
-      - key: WHATSAPP_API_VERSION
-        value: v21.0
+      - key: TWILIO_FROM_NUMBER
+        sync: false
       # false porque ENVIRONMENT=production lo exige (auth-service arranca
       # con FATAL si no -- ver app/config.py) -- con BREVO_API_KEY real de
       # arriba, el código de verificación sale por mail de verdad.
       - key: SKIP_EMAIL_VERIFICATION
         value: "false"
-      # "true" hasta que pegues WHATSAPP_ACCESS_TOKEN/WHATSAPP_PHONE_NUMBER_ID
-      # arriba en el dashboard de Render -- sin esas dos, WhatsApp cae en modo
-      # log-only (ver app/utils/whatsapp.py) y el registro quedaría bloqueado
-      # en el paso de teléfono. Una vez que las pegues, pasá esto a "false"
-      # (permitido en producción, a diferencia de SKIP_EMAIL_VERIFICATION) y
-      # sincronizá de nuevo.
+      # "true" hasta que pegues las tres credenciales de Twilio arriba en el
+      # dashboard de Render -- sin ellas, Twilio cae en modo log-only (ver
+      # app/utils/sms.py) y el registro quedaría bloqueado en el paso de
+      # teléfono. Una vez que las pegues, pasá esto a "false" (permitido en
+      # producción, a diferencia de SKIP_EMAIL_VERIFICATION) y sincronizá de
+      # nuevo.
       - key: SKIP_PHONE_VERIFICATION
         value: "true"
       # Cloudflare R2 -- avatares (parking-service reusa este mismo bucket
