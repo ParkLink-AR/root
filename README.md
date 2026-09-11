@@ -40,7 +40,7 @@ git clone --recurse-submodules git@github.com:ParkLink-AR/root.git
 cp .env.example .env
 ```
 
-Con el `.env` tal cual viene (todo vacío/con defaults de desarrollo) el sistema **ya funciona**: los servicios que necesitan una API key externa (email, SMS, Mercado Pago) caen a un modo "dev" que loguea lo que haría en vez de fallar. Ver [Variables de entorno / API keys](#variables-de-entorno--api-keys) para el detalle de cada una y cuándo hace falta completarla de verdad.
+Con el `.env` tal cual viene (todo vacío/con defaults de desarrollo) el sistema **ya funciona**: los servicios que necesitan una API key externa (email, WhatsApp, Mercado Pago) caen a un modo "dev" que loguea lo que haría en vez de fallar. Ver [Variables de entorno / API keys](#variables-de-entorno--api-keys) para el detalle de cada una y cuándo hace falta completarla de verdad.
 
 ### 2. Docker
 
@@ -50,7 +50,7 @@ Necesitás Docker (con Compose) corriendo. Después, desde la raíz:
 make up      # equivalente a: docker compose up --build --remove-orphans
 ```
 
-`make up` corre **en primer plano**, mostrando los logs de todos los servicios en la terminal (no queda en background) — cortalo con `Ctrl+C`. Es la forma más simple de ver, por ejemplo, el código de verificación de 6 dígitos que loguea `auth-service` cuando no hay `BREVO_API_KEY`/Twilio configurados.
+`make up` corre **en primer plano**, mostrando los logs de todos los servicios en la terminal (no queda en background) — cortalo con `Ctrl+C`. Es la forma más simple de ver, por ejemplo, el código de verificación de 6 dígitos que loguea `auth-service` cuando no hay `BREVO_API_KEY`/WhatsApp configurados.
 
 Otros comandos del `Makefile`:
 
@@ -194,7 +194,7 @@ Si te olvidás este paso, para cualquiera que clone la raíz de nuevo (o corra `
 |---|---|---|---|
 | `JWT_SECRET` | auth, gateway, payment | Usa `dev-secret-change-me` (¡inseguro!) | Un string largo y aleatorio |
 | `BREVO_API_KEY` | auth-service | Loguea el código de verificación en vez de mandar email | API key de [Brevo](https://app.brevo.com/) |
-| `TWILIO_*` | auth-service | Loguea el código SMS en vez de mandarlo | Credenciales de [Twilio](https://console.twilio.com) |
+| `WHATSAPP_*` | auth-service | Loguea el código en vez de mandarlo por WhatsApp | Credenciales de [Meta for Developers](https://developers.facebook.com/apps) + plantilla `AUTHENTICATION` aprobada en WhatsApp Manager |
 | `MERCADOPAGO_ACCESS_TOKEN` | payment-service | El servicio arranca pero crear preferencias de pago falla | Access Token de [MP Developers](https://www.mercadopago.com.ar/developers/panel/app) |
 | `MERCADOPAGO_WEBHOOK_SECRET` | payment-service | El webhook no valida firma (modo demo) | Secret del webhook en el panel de MP |
 | `MP_FORCE_TEST_PAYER_EMAIL` | payment-service | Usa el email del usuario logueado | Email del comprador de prueba del sandbox de MP |
