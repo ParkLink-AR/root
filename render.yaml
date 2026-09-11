@@ -98,6 +98,11 @@ services:
       # arriba, el código de verificación sale por mail de verdad.
       - key: SKIP_EMAIL_VERIFICATION
         value: "false"
+      # Verificar teléfono por SMS real requiere un número Twilio pago -- se
+      # salta acá (permitido en producción, a diferencia de email arriba; ver
+      # app/config.py). El teléfono se guarda igual, solo queda sin confirmar.
+      - key: SKIP_PHONE_VERIFICATION
+        value: "true"
       # Cloudflare R2 -- avatares (parking-service reusa este mismo bucket
       # para fotos de cochera via `fromService` más abajo).
       - key: R2_ACCOUNT_ID

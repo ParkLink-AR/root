@@ -44,6 +44,7 @@ services:
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
       - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-}
       - SKIP_EMAIL_VERIFICATION=${SKIP_EMAIL_VERIFICATION:-true}
+      - SKIP_PHONE_VERIFICATION=${SKIP_PHONE_VERIFICATION:-true}
       # Cloudflare R2 -- avatares subidos acá (ver DEPLOY.md para cómo crear
       # el bucket). parking-service usa el mismo bucket/credenciales para
       # las fotos de cochera.
