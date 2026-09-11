@@ -3,7 +3,9 @@
 Este repo tiene un [`render.yaml`](./render.yaml) (Blueprint) que define **todo**
 lo que hoy corre en `compose.yaml`: 6 Web Services (`gateway`, `auth-service`,
 `parking-service`, `booking-service`, `payment-service`, `notifications-service`),
-5 Postgres free (uno por servicio) y el `admin-dashboard` como Static Site.
+1 Postgres free (compartida entre los 5 servicios que necesitan base -- Render
+free sólo permite una base activa por cuenta, ver sección 5) y el
+`admin-dashboard` como Static Site.
 
 Todo queda armado solo al importar el Blueprint -- bases de datos, PostGIS,
 y todos los secretos compartidos entre servicios (JWT, claves internas,
@@ -27,8 +29,13 @@ Confirmá. Si algún campo del YAML quedó desactualizado (Render cambia el
 schema de tanto en tanto), el import te va a marcar la línea exacta con el
 error -- andá a https://render.com/docs/blueprint-spec y renombrá esa key.
 
-Cada servicio se conecta solo a su propia base (`fromDatabase` en el YAML),
-PostGIS se habilita solo la primera vez que arranca `parking-service` (ver
+Los 5 servicios comparten la misma base Postgres (`fromDatabase` en el
+YAML) -- Render free sólo permite una base activa por cuenta, así que no
+hay 5 instancias separadas. No hay colisión de tablas entre servicios
+(nombres únicos: `users`/`refresh_tokens`/... de auth, `parking_spots`/...
+de parking, `transactions` de payment, `bookings`/... de booking,
+`device_tokens`/... de notifications). PostGIS se habilita solo la
+primera vez que arranca `parking-service` (ver
 `parking-service/src/config/typeorm.config.ts`), y los secretos compartidos
 (`JWT_SECRET`, `GATEWAY_INTERNAL_SECRET`, `INTERNAL_SERVICE_KEY`) se generan
 una vez y se reusan entre servicios. No hay que tocar nada de eso a mano.
@@ -65,10 +72,9 @@ Render, cambian con el tiempo):
 
 - **Sleep**: los Web Services free se duermen tras ~15 min sin tráfico y
   tardan unos segundos en despertar en el próximo request.
-- **Postgres free expira**: cada instancia free tiene un límite de días
+- **Postgres free expira**: la instancia free tiene un límite de días
   antes de requerir upgrade a un plan pago -- revisá la fecha en el
-  dashboard apenas se creen (son 5 instancias distintas, cada una con su
-  propia fecha).
+  dashboard apenas se cree.
 - Sin disco persistente no es un problema: avatares y fotos de cochera se
   suben a Cloudflare R2, no a disco local, así que sobreviven redeploys.
 

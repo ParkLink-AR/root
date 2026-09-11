@@ -10,9 +10,13 @@
 # here still applies).
 #
 # What's fully automatic:
-#   - 5 free Postgres databases, one per service that needs one (Render's
-#     free plan is per-database, not "one instance total" -- each service
-#     gets its own, so nothing needs a manual `CREATE DATABASE` afterwards).
+#   - 1 free Postgres database, shared by all 5 services that need one --
+#     Render's free plan allows exactly one active free-tier database per
+#     account (confirmed against a real account; the docs don't state this
+#     explicitly), so 5 separate free databases isn't possible. All 5
+#     services connect to the same instance; their table names don't
+#     collide (verified: users/refresh_tokens/... vs parking_spots/... vs
+#     transactions vs bookings/... vs device_tokens/...), so this is safe.
 #   - PostGIS on parking-service's database: the app itself runs
 #     `CREATE EXTENSION IF NOT EXISTS postgis` before its first connection
 #     (see parking-service/src/config/typeorm.config.ts) -- no manual psql.
@@ -47,26 +51,10 @@
 #     Developer credentials if you want a different mode.
 
 databases:
-  - name: parklink-auth-db
+  - name: parklink-db
     plan: free
-    databaseName: parklink_auth_db
-    user: parklink_auth
-  - name: parklink-parking-db
-    plan: free
-    databaseName: parking_service
-    user: parklink_parking
-  - name: parklink-payment-db
-    plan: free
-    databaseName: payment_db
-    user: parklink_payment
-  - name: parklink-booking-db
-    plan: free
-    databaseName: booking_db
-    user: parklink_booking
-  - name: parklink-notifications-db
-    plan: free
-    databaseName: parklink_notif_db
-    user: parklink_notif
+    databaseName: parklink
+    user: parklink
 
 services:
   # ---------------- auth-service ----------------
@@ -83,7 +71,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: parklink-auth-db
+          name: parklink-db
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
@@ -139,7 +127,7 @@ services:
       # compose local).
       - key: DATABASE_URL
         fromDatabase:
-          name: parklink-parking-db
+          name: parklink-db
           property: connectionString
       - key: PORT
         value: "3001"
@@ -190,7 +178,7 @@ services:
         value: "8080"
       - key: DB_DSN
         fromDatabase:
-          name: parklink-booking-db
+          name: parklink-db
           property: connectionString
       # El único valor que no se puede autoprovisionar -- Render no tiene
       # RabbitMQ gestionado. Pegá acá la URL de un broker externo (ver el
@@ -233,7 +221,7 @@ services:
         value: "8004"
       - key: DATABASE_URL
         fromDatabase:
-          name: parklink-payment-db
+          name: parklink-db
           property: connectionString
       - key: JWT_SECRET
         fromService:
@@ -288,7 +276,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: parklink-notifications-db
+          name: parklink-db
           property: connectionString
       - key: RABBITMQ_URL
         fromService:
