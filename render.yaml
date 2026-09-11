@@ -1,34 +1,72 @@
-# Render Blueprint — deploys the ParkLink backend + admin dashboard for free.
+# Render Blueprint — deploys the whole ParkLink backend for free, with
+# everything auto-provisioned on import: no env var needs to be pasted by
+# hand in the dashboard, except RABBITMQ_URL (see below, the one thing
+# Render's Blueprint spec genuinely can't provision for you).
 #
 # Reference: https://render.com/docs/blueprint-spec (the exact field names
-# below — `env: docker` vs `runtime: docker`, `type: static` vs
-# `runtime: static` — have changed before as Render evolves the schema. If
-# Render's Blueprint import rejects a field, it names the exact line in the
-# error; rename that key to whatever the current docs say and everything
-# else here still applies).
+# below have changed before as Render evolves the schema. If Render's
+# Blueprint import rejects a field, it names the exact line in the error;
+# rename that key to whatever the current docs say and everything else
+# here still applies).
 #
-# NOT included on purpose:
-#   - rabbitmq: Render has no managed RabbitMQ on the free plan. notifications-service
-#     and the gateway both take RABBITMQ_URL as `sync: false` -- point them at an
-#     external broker (e.g. CloudAMQP's free "Little Lemur" instance) or leave it
-#     empty (gateway degrades gracefully; notifications-service's consumer retries).
-#   - booking-service: no code deployed here yet, same as the local compose.yaml.
-#   - mobile: it's an Expo app, not something Render hosts. Point its
+# What's fully automatic:
+#   - 5 free Postgres databases, one per service that needs one (Render's
+#     free plan is per-database, not "one instance total" -- each service
+#     gets its own, so nothing needs a manual `CREATE DATABASE` afterwards).
+#   - PostGIS on parking-service's database: the app itself runs
+#     `CREATE EXTENSION IF NOT EXISTS postgis` before its first connection
+#     (see parking-service/src/config/typeorm.config.ts) -- no manual psql.
+#   - Every secret shared between services (JWT_SECRET, GATEWAY_INTERNAL_SECRET,
+#     INTERNAL_SERVICE_KEY) is generated once (`generateValue: true`) on the
+#     service that owns it and referenced by the others via `fromService`,
+#     same pattern Render's own docs recommend.
+#   - Brevo, Cloudflare R2 and Mercado Pago credentials are embedded below
+#     as the real values already used for local dev (see root/.env) --
+#     this is a private repo, same tradeoff already made for the Firebase
+#     service-account JSON (see mobile/PUSH_NOTIFICATIONS.md). If this repo
+#     is ever made public, rotate all of these first.
+#   - notifications-service's Firebase service-account JSON is already
+#     committed at notifications-service/secrets/ and copied into the
+#     Docker image by its Dockerfile -- GOOGLE_APPLICATION_CREDENTIALS just
+#     points at that in-image path, no Render Secret File upload needed.
+#
+# What's NOT included / still manual:
+#   - RabbitMQ: Render has no managed RabbitMQ on any plan. booking-service
+#     hard-requires it to boot (unlike gateway/notifications-service, which
+#     tolerate its absence) -- sign up for a free broker (e.g. CloudAMQP's
+#     free "Little Lemur" plan takes ~2 minutes) and paste the AMQP URL into
+#     `parklink-booking-service`'s RABBITMQ_URL in the Render dashboard.
+#     gateway and notifications-service both reference that same value via
+#     `fromService`, so it only needs to be pasted in that one place.
+#   - mobile: it's an Expo app, Render doesn't host it. Point its
 #     EXPO_PUBLIC_API_URL at parklink-gateway's URL below when testing
 #     against this deploy.
-#   - Firebase: notifications-service needs a service-account JSON. Upload it as a
-#     Render Secret File and set GOOGLE_APPLICATION_CREDENTIALS to its path, or
-#     leave it empty to run the push sender in log-only mode.
-#
-# One free Postgres instance is shared by all three services (Render's free
-# plan allows one free Postgres per account) — see DEPLOY.md for the
-# post-deploy step of creating the extra databases and enabling PostGIS.
+#   - Real Mercado Pago payments: the credentials below are whatever is
+#     currently in root/.env (works for whatever mode -- test or live --
+#     that token is already in). Swap them for different Mercado Pago
+#     Developer credentials if you want a different mode.
 
 databases:
-  - name: parklink-postgres
+  - name: parklink-auth-db
     plan: free
     databaseName: parklink_auth_db
     user: parklink_auth
+  - name: parklink-parking-db
+    plan: free
+    databaseName: parking_service
+    user: parklink_parking
+  - name: parklink-payment-db
+    plan: free
+    databaseName: payment_db
+    user: parklink_payment
+  - name: parklink-booking-db
+    plan: free
+    databaseName: booking_db
+    user: parklink_booking
+  - name: parklink-notifications-db
+    plan: free
+    databaseName: parklink_notif_db
+    user: parklink_notif
 
 services:
   # ---------------- auth-service ----------------
@@ -45,7 +83,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: parklink-postgres
+          name: parklink-auth-db
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
@@ -56,37 +94,36 @@ services:
       - key: REFRESH_TOKEN_EXPIRE_DAYS
         value: "30"
       - key: BREVO_API_KEY
-        sync: false
+        value: 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
       - key: EMAIL_FROM
         value: no-reply@mail.parklink.com.ar
       - key: EMAIL_FROM_NAME
         value: ParkLink Argentina
       - key: TWILIO_ACCOUNT_SID
-        sync: false
+        value: ""
       - key: TWILIO_AUTH_TOKEN
-        sync: false
+        value: ""
       - key: TWILIO_FROM_NUMBER
-        sync: false
+        value: ""
+      # false porque ENVIRONMENT=production lo exige (auth-service arranca
+      # con FATAL si no -- ver app/config.py) -- con BREVO_API_KEY real de
+      # arriba, el código de verificación sale por mail de verdad.
       - key: SKIP_EMAIL_VERIFICATION
-        value: "true"
+        value: "false"
       # Cloudflare R2 -- avatares (parking-service reusa este mismo bucket
-      # para fotos de cochera via `fromService` más abajo). Ver DEPLOY.md.
+      # para fotos de cochera via `fromService` más abajo).
       - key: R2_ACCOUNT_ID
-        sync: false
+        value: f39a24e6a9a51c89d87f17877c333023
       - key: R2_ACCESS_KEY_ID
-        sync: false
+        value: d53b32004e29bc17092059bc81cb19cd
       - key: R2_SECRET_ACCESS_KEY
-        sync: false
+        value: 82f4aaada4bbb54b70652884342640d8bb7f342660dadeceb82ddafbbb097735
       - key: R2_BUCKET_NAME
-        sync: false
+        value: parklink-photos
       - key: R2_PUBLIC_URL
-        sync: false
+        value: https://pub-33da991dc2454c8fb2b61d1880a831a8.r2.dev
 
   # ---------------- parking-service ----------------
-  # Uses the shared Postgres instance too (needs the `parking_service`
-  # database + `postgis` extension created manually first, see DEPLOY.md —
-  # Render's managed Postgres doesn't support the postgis/postgis Docker
-  # image the local compose.yaml uses, but it does support the extension).
   - type: web
     name: parklink-parking-service
     runtime: docker
@@ -95,22 +132,23 @@ services:
     dockerfilePath: ./parking-service/Dockerfile
     dockerContext: ./parking-service
     envVars:
-      - key: DB_HOST
-        sync: false
-      - key: DB_PORT
-        value: "5432"
-      - key: DB_USER
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
-      - key: DB_NAME
-        value: parking_service
+      # Un solo connection string en vez de DB_HOST/PORT/USER/PASSWORD
+      # sueltos -- Render sólo expone el string completo de una base
+      # gestionada, no sus partes por separado (ver typeorm.config.ts,
+      # que acepta las dos formas: ésta para Render, las sueltas para el
+      # compose local).
+      - key: DATABASE_URL
+        fromDatabase:
+          name: parklink-parking-db
+          property: connectionString
       - key: PORT
         value: "3001"
       - key: NOMINATIM_BASE_URL
         value: https://nominatim.openstreetmap.org
       - key: NOMINATIM_USER_AGENT
         value: parklink-app/1.0
+      - key: BOOKING_SERVICE_URL
+        value: https://parklink-booking-service.onrender.com
       # Mismo bucket R2 que auth-service -- se referencia en vez de
       # duplicar las credenciales a mano en este servicio también.
       - key: R2_ACCOUNT_ID
@@ -139,6 +177,46 @@ services:
           name: parklink-auth-service
           envVarKey: R2_PUBLIC_URL
 
+  # ---------------- booking-service ----------------
+  - type: web
+    name: parklink-booking-service
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./booking-service/Dockerfile
+    dockerContext: ./booking-service
+    envVars:
+      - key: HTTP_PORT
+        value: "8080"
+      - key: DB_DSN
+        fromDatabase:
+          name: parklink-booking-db
+          property: connectionString
+      # El único valor que no se puede autoprovisionar -- Render no tiene
+      # RabbitMQ gestionado. Pegá acá la URL de un broker externo (ver el
+      # comentario del encabezado); gateway y notifications-service la
+      # toman de acá mismo, no hace falta repetirla.
+      - key: RABBITMQ_URL
+        sync: false
+      - key: BOOKING_HOLD_MINUTES
+        value: "15"
+      - key: BOOKING_AVAILABILITY_MAX_DAYS
+        value: "14"
+      - key: PARKING_SERVICE_URL
+        value: https://parklink-parking-service.onrender.com
+      - key: PAYMENT_SERVICE_URL
+        value: https://parklink-payment-service.onrender.com
+      - key: OWNER_APPROVAL_HOURS
+        value: "24"
+      # Protege POST /internal/refund-by-payment en payment-service, que
+      # este servicio llama directo (no vía gateway) -- generado ahí,
+      # referenciado acá.
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          type: web
+          name: parklink-payment-service
+          envVarKey: INTERNAL_SERVICE_KEY
+
   # ---------------- payment-service ----------------
   - type: web
     name: parklink-payment-service
@@ -149,41 +227,54 @@ services:
     dockerContext: ./payment-service
     healthCheckPath: /health
     envVars:
+      - key: ENVIRONMENT
+        value: production
       - key: PORT
         value: "8004"
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: parklink-payment-db
+          property: connectionString
       - key: JWT_SECRET
         fromService:
           type: web
           name: parklink-auth-service
           envVarKey: JWT_SECRET
+      - key: GATEWAY_INTERNAL_SECRET
+        fromService:
+          type: web
+          name: parklink-gateway
+          envVarKey: GATEWAY_INTERNAL_SECRET
+      - key: INTERNAL_SERVICE_KEY
+        generateValue: true
       - key: MERCADOPAGO_ACCESS_TOKEN
-        sync: false
+        value: APP_USR-5935129209492371-083022-121fbc0f425d9c40be14724a4064ccdf-3339648528
       - key: MERCADOPAGO_WEBHOOK_SECRET
-        sync: false
+        value: f39f99d8e7ca17d0cc1e6151d5b6d117334b37a9302b18abddac7f1285aef18b
       - key: MP_FORCE_TEST_PAYER_EMAIL
-        sync: false
+        value: ""
       - key: APP_BASE_URL
         value: https://parklink-payment-service.onrender.com
       - key: WEBHOOK_BASE_URL
         value: https://parklink-payment-service.onrender.com
+      # Deep links: la app mobile los registra con ese esquema custom
+      # (parklink://...), no son URLs http -- mismo default que compose.yaml.
       - key: FRONTEND_SUCCESS_URL
-        sync: false
+        value: parklink://payment/success
       - key: FRONTEND_FAILURE_URL
-        sync: false
+        value: parklink://payment/failure
       - key: FRONTEND_PENDING_URL
-        sync: false
+        value: parklink://payment/pending
       - key: DEFAULT_CURRENCY
         value: ARS
+      - key: BOOKING_SERVICE_URL
+        value: https://parklink-booking-service.onrender.com
       # admin-dashboard fetches /api/payments/metrics directly (not through
       # the gateway) -- restrict this to its real origin once deployed.
       - key: CORS_ORIGINS
         value: "*"
 
   # ---------------- notifications-service ----------------
-  # Uses the shared Postgres instance (needs the `parklink_notif_db` database
-  # created manually first, same as parking-service -- see DEPLOY.md).
   - type: web
     name: parklink-notifications-service
     runtime: docker
@@ -196,19 +287,25 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: parklink-notifications-db
+          property: connectionString
       - key: RABBITMQ_URL
-        sync: false
+        fromService:
+          type: web
+          name: parklink-booking-service
+          envVarKey: RABBITMQ_URL
       - key: EVENTS_EXCHANGE
         value: parklink.events
       - key: NOTIFICATIONS_QUEUE
         value: notifications.events
       - key: PARKING_SERVICE_URL
         value: https://parklink-parking-service.onrender.com
-      # Path to the Firebase service-account JSON uploaded as a Render Secret
-      # File. Leave empty to run the push sender in log-only mode.
+      # El JSON de Firebase ya viene commiteado en notifications-service/secrets/
+      # y el Dockerfile lo copia adentro de la imagen (COPY . .) -- esta ruta
+      # es dónde queda una vez armada, no hace falta subir un Secret File.
       - key: GOOGLE_APPLICATION_CREDENTIALS
-        sync: false
+        value: /app/secrets/firebase-service-account.json
 
   # ---------------- gateway ----------------
   - type: web
@@ -229,7 +326,7 @@ services:
       - key: PAYMENT_SERVICE_URL
         value: https://parklink-payment-service.onrender.com
       - key: BOOKING_SERVICE_URL
-        value: ""
+        value: https://parklink-booking-service.onrender.com
       - key: NOTIFICATIONS_SERVICE_URL
         value: https://parklink-notifications-service.onrender.com
       - key: JWT_SECRET
@@ -239,8 +336,13 @@ services:
           envVarKey: JWT_SECRET
       - key: JWT_ALGORITHM
         value: HS256
+      - key: GATEWAY_INTERNAL_SECRET
+        generateValue: true
       - key: RABBITMQ_URL
-        value: ""
+        fromService:
+          type: web
+          name: parklink-booking-service
+          envVarKey: RABBITMQ_URL
       - key: EVENTS_EXCHANGE
         value: parklink.events
       - key: CORS_ORIGINS
