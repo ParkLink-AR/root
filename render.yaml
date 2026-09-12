@@ -87,9 +87,10 @@ services:
         value: no-reply@mail.parklink.com.ar
       - key: EMAIL_FROM_NAME
         value: ParkLink Argentina
-      # Twilio (SMS) -- credenciales de tu cuenta en
-      # https://console.twilio.com. No se pueden autoprovisionar: son tuyas,
-      # pegalas en el dashboard de Render (parklink-auth-service -> Environment).
+      # Twilio (SMS) -- cuenta paga con Trust Hub compliance profile (Individual)
+      # ya aprobado. A diferencia de Brevo/R2/Mercado Pago abajo, ésta no va
+      # embebida -- pegala vos en el dashboard de Render (parklink-auth-service
+      # -> Environment) después de importar el Blueprint.
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN

@@ -9,9 +9,9 @@ free sólo permite una base activa por cuenta, ver sección 6) y el
 
 Todo queda armado solo al importar el Blueprint -- bases de datos, PostGIS,
 y todos los secretos compartidos entre servicios (JWT, claves internas,
-Brevo, Cloudflare R2, Mercado Pago). Dos cosas no se pueden autoprovisionar
-porque son cuentas de terceros que tenés que crear vos: RabbitMQ (paso 3) y
-Twilio para el código de verificación de teléfono por SMS (paso 4).
+Brevo, Cloudflare R2, Mercado Pago). Dos cosas no se pueden autoprovisionar:
+RabbitMQ (paso 3, no es una cuenta que se cree por API) y Twilio (paso 4,
+credenciales de una cuenta de mensajería que preferimos no commitear).
 
 ## 1. Dar acceso a Render a los submódulos
 
@@ -60,32 +60,35 @@ Sin este paso, `booking-service` no arranca (se cae con `rabbitmq dial`)
 ## 4. Twilio (código de verificación de teléfono por SMS)
 
 `auth-service` manda el código de 6 dígitos del registro (y del cambio de
-teléfono) por SMS vía Twilio (ver `auth-service/app/utils/sms.py`).
+teléfono) por SMS vía Twilio (ver `auth-service/app/utils/sms.py`). Ya está
+armada y probada (cuenta paga + compliance profile aprobado), pero las
+credenciales van a mano en el dashboard de Render, no en este archivo:
 
-1. Creá una cuenta en https://console.twilio.com (no pide verificación de
-   negocio ni aprobación de plantillas -- anda apenas cargás una tarjeta).
-2. Comprá un número de teléfono (Phone Numbers → Buy a number, ~1.15 USD/mes)
-   con capacidad SMS.
-3. Copiá el **Account SID** y el **Auth Token** desde el dashboard principal.
-4. Dashboard de Render → `parklink-auth-service` → pestaña **Environment**:
-   - `TWILIO_ACCOUNT_SID`: el SID del paso 3.
-   - `TWILIO_AUTH_TOKEN`: el token del paso 3.
-   - `TWILIO_FROM_NUMBER`: el número del paso 2 (formato `+1...`).
-5. Cambiá `SKIP_PHONE_VERIFICATION` a `"false"` en el mismo servicio (el
+1. Dashboard de Render → `parklink-auth-service` → pestaña **Environment**:
+   - `TWILIO_ACCOUNT_SID`
+   - `TWILIO_AUTH_TOKEN`
+   - `TWILIO_FROM_NUMBER` (el número comprado, formato `+1...`)
+2. Cambiá `SKIP_PHONE_VERIFICATION` a `"false"` en el mismo servicio (el
    Blueprint la trae en `"true"` para no bloquear el registro hasta que
-   completes los pasos de arriba) y sincronizá.
-6. En `mobile/.env` (o la rama que uses para apuntar a este deploy), poné
+   pegues las tres de arriba) y sincronizá.
+3. En `mobile/.env` (o la rama que uses para apuntar a este deploy), poné
    `EXPO_PUBLIC_SKIP_PHONE_VERIFICATION=false` y reconstruí la app -- si no,
-   el wizard de registro sigue saltando el paso de código aunque el
-   backend ya lo esté exigiendo, y el usuario nunca ve la pantalla para
-   escribirlo.
+   el wizard de registro sigue saltando el paso de código aunque el backend
+   ya lo esté exigiendo.
 
-Sin los pasos 4-5, el registro no se rompe: `auth-service` cae en modo
-log-only (loguea el código en vez de mandarlo), igual que en local sin estas
-variables -- pero ningún usuario real puede completar el paso de teléfono,
-porque el código nunca le llega. Ojo con el saldo: Twilio cobra ~0.10 USD por
-SMS a números argentinos, descontado de un saldo prepago que cargás con
-tarjeta -- si se agota, deja de mandar (no te cobra de más solo).
+Si en algún momento hay que armar la cuenta de cero: cuenta paga en
+https://console.twilio.com (la trial no sirve, solo deja usar plantillas
+enlatadas sin lugar para nuestro código real) + comprar un número con
+capacidad SMS (Phone Numbers → Buy a number, ~1.15 USD/mes) + **Trust Hub →
+Profiles → Primary compliance profile** completado como **Individual** (solo
+datos personales, sin documentación de negocio) y aprobado -- aprobación en
+hasta 48hs, sin esto Twilio devuelve `20003 Primary compliance profile is not
+approved` y no deja mandar ningún SMS.
+
+Ojo con el saldo: Twilio cobra ~0.10 USD por SMS a números argentinos,
+descontado de un saldo prepago que cargás con tarjeta -- si se agota, deja de
+mandar (no te cobra de más solo). Sin las tres variables de arriba,
+`auth-service` cae en modo log-only (loguea el código en vez de mandarlo).
 
 ## 5. Mercado Pago: credenciales reales
 
@@ -112,7 +115,10 @@ Render, cambian con el tiempo):
 ## 7. Probar la app mobile contra este deploy
 
 En `mobile/.env`, cambiá `EXPO_PUBLIC_API_URL` a la URL de
-`parklink-gateway` (`https://parklink-gateway.onrender.com`).
+`parklink-gateway` (`https://parklink-gateway.onrender.com`). Si ya
+completaste la sección 4 (Twilio configurado y `SKIP_PHONE_VERIFICATION` en
+`"false"`), poné también `EXPO_PUBLIC_SKIP_PHONE_VERIFICATION=false` para que
+el wizard de registro pida el código real.
 
 ## 8. Seguridad de lo que va commiteado en `render.yaml`
 
@@ -127,6 +133,5 @@ Manage API Tokens; Mercado Pago → Developers → Credenciales) y actualizá
 
 `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` quedan afuera
 de esa lista a propósito -- van como `sync: false` (paso manual, sección 4)
-en vez de embebidos, porque no los tengo para poner acá. Si en algún momento
-los pegás directo en el YAML en vez de en el dashboard, aplicá el mismo
-criterio: rotalos antes de hacer público el repo.
+en vez de embebidos, para no dejar la clave de una cuenta de mensajería paga
+dando vueltas en el historial de git.
