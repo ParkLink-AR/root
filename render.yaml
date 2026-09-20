@@ -257,14 +257,6 @@ services:
         value: https://parklink-payment-service.onrender.com
       - key: WEBHOOK_BASE_URL
         value: https://parklink-payment-service.onrender.com
-      # Deep links: la app mobile los registra con ese esquema custom
-      # (parklink://...), no son URLs http -- mismo default que compose.yaml.
-      - key: FRONTEND_SUCCESS_URL
-        value: parklink://payment/success
-      - key: FRONTEND_FAILURE_URL
-        value: parklink://payment/failure
-      - key: FRONTEND_PENDING_URL
-        value: parklink://payment/pending
       - key: DEFAULT_CURRENCY
         value: ARS
       - key: BOOKING_SERVICE_URL
