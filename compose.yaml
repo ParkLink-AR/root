@@ -119,7 +119,7 @@ services:
       - HTTP_PORT=8080
       - DB_DSN=postgres://bookinguser:bookingpass@db-booking:5432/booking_db?sslmode=disable
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - BOOKING_HOLD_MINUTES=15
+      - BOOKING_HOLD_MINUTES=5
       - BOOKING_AVAILABILITY_MAX_DAYS=14
       - PARKING_SERVICE_URL=http://parking-service:3001
       - PAYMENT_SERVICE_URL=http://payment-service:8004

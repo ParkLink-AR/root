@@ -243,7 +243,7 @@ El flujo de reserva tiene varios pasos encadenados. Si alguno falla el siguiente
 
 [Mobile] booking/confirm.tsx
   → POST /parking-spots/{spotId}/bookings   (booking-service)
-      Crea la reserva en estado PENDING_PAYMENT con hold de 15 min
+      Crea la reserva en estado PENDING_PAYMENT con hold de 5 min
       Devuelve: { id: "<bookingId>", ... }
   → POST /payments/create-preference        (payment-service)
       Body: { amount, title, externalReference: bookingId }
