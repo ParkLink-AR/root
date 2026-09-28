@@ -26,4 +26,4 @@
 	url = git@github.com:ParkLink-AR/gateway.git
 [submodule "admin-backend"]
 	path = admin-backend
-	url = git@github.com:ParkLink-AR/admin-backend.git
+	url = git@github.com:ParkLink-AR/admin-web.git
