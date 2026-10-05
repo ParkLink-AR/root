@@ -209,8 +209,9 @@ services:
       - key: OWNER_APPROVAL_HOURS
         value: "24"
       # Protege POST /internal/refund-by-payment en payment-service, que
-      # este servicio llama directo (no vía gateway) -- generado ahí,
-      # referenciado acá.
+      # este servicio llama directo (no vía gateway), y POST
+      # /bookings/{id}/confirm acá, que solo payment-service puede llamar --
+      # generado ahí, referenciado acá.
       - key: INTERNAL_SERVICE_KEY
         fromService:
           type: web

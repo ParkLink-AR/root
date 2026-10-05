@@ -166,8 +166,9 @@ services:
       - DATABASE_URL=postgresql://user_payment:pass_payment@db-payment:5432/payment_db
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
-      # Compartida con booking-service: protege POST /internal/refund-by-payment,
-      # que no pasa por el gateway (ver por qué en payment-service/src/app.js).
+      # Compartida con booking-service: protege POST /internal/refund-by-payment
+      # (booking -> payment) y POST /bookings/{id}/confirm (payment -> booking),
+      # ninguno de los dos pasa por el gateway.
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       # Sin credenciales reales de Mercado Pago el servicio arranca igual,
       # pero crear una preferencia de pago real va a fallar.
@@ -185,7 +186,6 @@ services:
       - FRONTEND_PENDING_URL=${FRONTEND_PENDING_URL:-parklink://payment/pending}
       - DEFAULT_CURRENCY=${DEFAULT_CURRENCY:-ARS}
       - BOOKING_SERVICE_URL=http://booking-service:8080
-      - BOOKING_SERVICE_AUTH_TOKEN=${BOOKING_SERVICE_AUTH_TOKEN:-}
       - CORS_ORIGINS=${PAYMENT_CORS_ORIGINS:-*}
     depends_on:
       db-payment:
