@@ -13,6 +13,7 @@
 services:
   # ---------------- auth-service ----------------
   db-auth:
+    restart: unless-stopped
     image: postgres:15-alpine
     environment:
       - POSTGRES_USER=parklink_auth
@@ -28,9 +29,14 @@ services:
       retries: 5
 
   auth-service:
+    restart: unless-stopped
     build: ./auth-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Requests must carry the gateway's secret or the service-to-service key (see
+      # each service's trusted-caller middleware) -- shared with the gateway / other services.
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql://parklink_auth:parklink_auth@db-auth:5432/parklink_auth_db
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
@@ -59,6 +65,7 @@ services:
 
   # ---------------- parking-service ----------------
   db-parking:
+    restart: unless-stopped
     image: postgis/postgis:16-3.4
     environment:
       - POSTGRES_USER=parklink
@@ -74,9 +81,14 @@ services:
       retries: 5
 
   parking-service:
+    restart: unless-stopped
     build: ./parking-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Requests must carry the gateway's secret or the service-to-service key (see
+      # each service's trusted-caller middleware) -- shared with the gateway / other services.
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       - DB_HOST=db-parking
       - DB_PORT=5432
       - DB_USER=parklink
@@ -98,6 +110,7 @@ services:
 
   # ---------------- booking-service ----------------
   db-booking:
+    restart: unless-stopped
     image: postgres:15-alpine
     environment:
       - POSTGRES_USER=bookinguser
@@ -113,9 +126,13 @@ services:
       retries: 5
 
   booking-service:
+    restart: unless-stopped
     build: ./booking-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Requests must carry the gateway's secret or the service-to-service key (see
+      # each service's trusted-caller middleware) -- shared with the gateway / other services.
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
       - HTTP_PORT=8080
       - DB_DSN=postgres://bookinguser:bookingpass@db-booking:5432/booking_db?sslmode=disable
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
@@ -144,6 +161,7 @@ services:
 
   # ---------------- payment-service ----------------
   db-payment:
+    restart: unless-stopped
     image: postgres:15-alpine
     environment:
       - POSTGRES_USER=user_payment
@@ -159,6 +177,7 @@ services:
       retries: 5
 
   payment-service:
+    restart: unless-stopped
     build: ./payment-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
@@ -195,6 +214,7 @@ services:
 
   # ---------------- notifications-service ----------------
   db-notifications:
+    restart: unless-stopped
     image: postgres:15-alpine
     environment:
       - POSTGRES_USER=parklink_notif
@@ -210,9 +230,14 @@ services:
       retries: 5
 
   notifications-service:
+    restart: unless-stopped
     build: ./notifications-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Requests must carry the gateway's secret or the service-to-service key (see
+      # each service's trusted-caller middleware) -- shared with the gateway / other services.
+      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql://parklink_notif:parklink_notif@db-notifications:5432/parklink_notif_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
@@ -233,6 +258,7 @@ services:
 
   # ---------------- gateway ----------------
   rabbitmq:
+    restart: unless-stopped
     image: rabbitmq:3.13-management-alpine
     ports:
       - "5672:5672"   # AMQP
@@ -247,6 +273,7 @@ services:
       - parklink_rabbitmq_data:/var/lib/rabbitmq
 
   gateway:
+    restart: unless-stopped
     build: ./gateway
     ports:
       - "8080:8080"

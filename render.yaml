@@ -67,6 +67,19 @@ services:
     dockerContext: ./auth-service
     healthCheckPath: /livez
     envVars:
+      # Trusted-caller check (see each service's trusted-caller middleware): this service's
+      # own public URL only answers requests carrying the gateway's secret or the
+      # service-to-service key.
+      - key: GATEWAY_INTERNAL_SECRET
+        fromService:
+          type: web
+          name: parklink-gateway
+          envVarKey: GATEWAY_INTERNAL_SECRET
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          type: web
+          name: parklink-payment-service
+          envVarKey: INTERNAL_SERVICE_KEY
       - key: ENVIRONMENT
         value: production
       - key: DATABASE_URL
@@ -132,6 +145,19 @@ services:
     dockerfilePath: ./parking-service/Dockerfile
     dockerContext: ./parking-service
     envVars:
+      # Trusted-caller check (see each service's trusted-caller middleware): this service's
+      # own public URL only answers requests carrying the gateway's secret or the
+      # service-to-service key.
+      - key: GATEWAY_INTERNAL_SECRET
+        fromService:
+          type: web
+          name: parklink-gateway
+          envVarKey: GATEWAY_INTERNAL_SECRET
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          type: web
+          name: parklink-payment-service
+          envVarKey: INTERNAL_SERVICE_KEY
       # Un solo connection string en vez de DB_HOST/PORT/USER/PASSWORD
       # sueltos -- Render sólo expone el string completo de una base
       # gestionada, no sus partes por separado (ver typeorm.config.ts,
@@ -186,6 +212,14 @@ services:
     dockerfilePath: ./booking-service/Dockerfile
     dockerContext: ./booking-service
     envVars:
+      # Trusted-caller check (see each service's trusted-caller middleware): this service's
+      # own public URL only answers requests carrying the gateway's secret or the
+      # service-to-service key.
+      - key: GATEWAY_INTERNAL_SECRET
+        fromService:
+          type: web
+          name: parklink-gateway
+          envVarKey: GATEWAY_INTERNAL_SECRET
       - key: HTTP_PORT
         value: "8080"
       - key: DB_DSN
@@ -277,6 +311,19 @@ services:
     dockerContext: ./notifications-service
     healthCheckPath: /livez
     envVars:
+      # Trusted-caller check (see each service's trusted-caller middleware): this service's
+      # own public URL only answers requests carrying the gateway's secret or the
+      # service-to-service key.
+      - key: GATEWAY_INTERNAL_SECRET
+        fromService:
+          type: web
+          name: parklink-gateway
+          envVarKey: GATEWAY_INTERNAL_SECRET
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          type: web
+          name: parklink-payment-service
+          envVarKey: INTERNAL_SERVICE_KEY
       - key: ENVIRONMENT
         value: production
       - key: DATABASE_URL
