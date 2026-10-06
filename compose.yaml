@@ -98,6 +98,9 @@ services:
       - NOMINATIM_BASE_URL=${NOMINATIM_BASE_URL:-https://nominatim.openstreetmap.org}
       - NOMINATIM_USER_AGENT=${NOMINATIM_USER_AGENT:-parklink-app/1.0}
       - BOOKING_SERVICE_URL=http://booking-service:8080
+      # Antes de publicar una cochera, parking-service le pregunta a auth-service si el
+      # dueño tiene cargados sus datos de cobro -- sin esto, publicar falla con 502.
+      - AUTH_SERVICE_URL=http://auth-service:8000
       # Mismo bucket R2 que auth-service, para las fotos de cochera.
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}

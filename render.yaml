@@ -175,6 +175,10 @@ services:
         value: parklink-app/1.0
       - key: BOOKING_SERVICE_URL
         value: https://parklink-booking-service.onrender.com
+      # Publishing a spot first asks auth-service whether the owner has payout info on
+      # file -- without this it fails with a 502.
+      - key: AUTH_SERVICE_URL
+        value: https://parklink-auth-service.onrender.com
       # Mismo bucket R2 que auth-service -- se referencia en vez de
       # duplicar las credenciales a mano en este servicio también.
       - key: R2_ACCOUNT_ID
