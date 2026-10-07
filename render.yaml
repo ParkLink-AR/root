@@ -98,6 +98,14 @@ services:
         value: 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
       - key: EMAIL_FROM
         value: no-reply@mail.parklink.com.ar
+      # Suspending/closing/deleting an account pauses or archives the owner's spots,
+      # cancels its bookings and drops its push tokens (app/services/account_lifecycle.py).
+      - key: PARKING_SERVICE_URL
+        value: https://parklink-parking-service.onrender.com
+      - key: BOOKING_SERVICE_URL
+        value: https://parklink-booking-service.onrender.com
+      - key: NOTIFICATIONS_SERVICE_URL
+        value: https://parklink-notifications-service.onrender.com
       - key: EMAIL_FROM_NAME
         value: ParkLink Argentina
       # Twilio (SMS) -- cuenta paga con Trust Hub compliance profile (Individual)
@@ -244,6 +252,9 @@ services:
         value: https://parklink-parking-service.onrender.com
       - key: PAYMENT_SERVICE_URL
         value: https://parklink-payment-service.onrender.com
+      # Only an ACTIVE account can book (not a suspended one, nor one being deleted).
+      - key: AUTH_SERVICE_URL
+        value: https://parklink-auth-service.onrender.com
       - key: OWNER_APPROVAL_HOURS
         value: "24"
       # Protege POST /internal/refund-by-payment en payment-service, que

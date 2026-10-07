@@ -38,6 +38,11 @@ services:
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       - ENVIRONMENT=${ENVIRONMENT:-development}
+      # Suspending/closing/deleting an account pauses or archives the owner's spots,
+      # cancels its bookings and drops its push tokens (app/services/account_lifecycle.py).
+      - PARKING_SERVICE_URL=http://parking-service:3001
+      - BOOKING_SERVICE_URL=http://booking-service:8080
+      - NOTIFICATIONS_SERVICE_URL=http://notifications-service:8000
       - DATABASE_URL=postgresql://parklink_auth:parklink_auth@db-auth:5432/parklink_auth_db
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
@@ -143,6 +148,8 @@ services:
       - BOOKING_AVAILABILITY_MAX_DAYS=14
       - PARKING_SERVICE_URL=http://parking-service:3001
       - PAYMENT_SERVICE_URL=http://payment-service:8004
+      # Only an ACTIVE account can book (not a suspended one, nor one being deleted).
+      - AUTH_SERVICE_URL=http://auth-service:8000
       - OWNER_APPROVAL_HOURS=24
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       # Bucket R2 propio y PRIVADO para los comprobantes de pago (bank-transfer receipts) --
