@@ -221,11 +221,16 @@ services:
       - DEFAULT_CURRENCY=${DEFAULT_CURRENCY:-ARS}
       - BOOKING_SERVICE_URL=http://booking-service:8080
       - CORS_ORIGINS=${PAYMENT_CORS_ORIGINS:-*}
+      # Eventos de dominio (refund.completed -> aviso al conductor cuando se acredita un
+      # reembolso que había fallado), al mismo exchange que el resto.
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     depends_on:
       db-payment:
         condition: service_healthy
       booking-service:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   # ---------------- notifications-service ----------------
   db-notifications:
