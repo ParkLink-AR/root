@@ -268,6 +268,13 @@ services:
       # (private repo) and mounted below, so push works out of the box. Override
       # with FIREBASE_CREDENTIALS_PATH= (empty) in your .env to force log-only.
       - GOOGLE_APPLICATION_CREDENTIALS=${FIREBASE_CREDENTIALS_PATH:-/run/secrets/firebase-service-account.json}
+      # Email to ParkLink's support inbox when a user opens a ticket or writes on one (same
+      # Brevo account as auth-service). ADMIN_PANEL_URL adds an "open in the panel" link.
+      - BREVO_API_KEY=${BREVO_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-no-reply@mail.parklink.com.ar}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-ParkLink Argentina}
+      - SUPPORT_INBOX_EMAIL=${SUPPORT_INBOX_EMAIL:-contacto@parklink.com.ar}
+      - ADMIN_PANEL_URL=${ADMIN_PANEL_URL:-}
     volumes:
       - ./notifications-service/secrets:/run/secrets:ro
     depends_on:
