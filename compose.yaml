@@ -33,6 +33,9 @@ services:
     build: ./auth-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # Requests must carry the gateway's secret or the service-to-service key (see
       # each service's trusted-caller middleware) -- shared with the gateway / other services.
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
@@ -90,6 +93,9 @@ services:
     build: ./parking-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # Requests must carry the gateway's secret or the service-to-service key (see
       # each service's trusted-caller middleware) -- shared with the gateway / other services.
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
@@ -143,6 +149,9 @@ services:
     build: ./booking-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # Requests must carry the gateway's secret or the service-to-service key (see
       # each service's trusted-caller middleware) -- shared with the gateway / other services.
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
@@ -196,6 +205,9 @@ services:
     build: ./payment-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       - PORT=8004
       - DATABASE_URL=postgresql://user_payment:pass_payment@db-payment:5432/payment_db
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
@@ -254,6 +266,9 @@ services:
     build: ./notifications-service
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
+      # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # Requests must carry the gateway's secret or the service-to-service key (see
       # each service's trusted-caller middleware) -- shared with the gateway / other services.
       - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
@@ -305,6 +320,9 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - AUTH_SERVICE_URL=http://auth-service:8000
       - PARKING_SERVICE_URL=http://parking-service:3001
