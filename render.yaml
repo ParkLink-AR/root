@@ -95,7 +95,7 @@ services:
       - key: REFRESH_TOKEN_EXPIRE_DAYS
         value: "30"
       - key: BREVO_API_KEY
-        value: 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
+        sync: false
       - key: EMAIL_FROM
         value: no-reply@mail.parklink.com.ar
       # Suspending/closing/deleting an account pauses or archives the owner's spots,
@@ -134,11 +134,11 @@ services:
       # Cloudflare R2 -- avatares (parking-service reusa este mismo bucket
       # para fotos de cochera via `fromService` más abajo).
       - key: R2_ACCOUNT_ID
-        value: f39a24e6a9a51c89d87f17877c333023
+        sync: false
       - key: R2_ACCESS_KEY_ID
-        value: d53b32004e29bc17092059bc81cb19cd
+        sync: false
       - key: R2_SECRET_ACCESS_KEY
-        value: 82f4aaada4bbb54b70652884342640d8bb7f342660dadeceb82ddafbbb097735
+        sync: false
       - key: R2_BUCKET_NAME
         value: parklink-photos
       - key: R2_PUBLIC_URL
@@ -246,8 +246,6 @@ services:
         sync: false
       - key: BOOKING_HOLD_MINUTES
         value: "5"
-      - key: BOOKING_AVAILABILITY_MAX_DAYS
-        value: "14"
       - key: PARKING_SERVICE_URL
         value: https://parklink-parking-service.onrender.com
       - key: PAYMENT_SERVICE_URL
@@ -298,9 +296,9 @@ services:
       - key: INTERNAL_SERVICE_KEY
         generateValue: true
       - key: MERCADOPAGO_ACCESS_TOKEN
-        value: APP_USR-5935129209492371-083022-121fbc0f425d9c40be14724a4064ccdf-3339648528
+        sync: false
       - key: MERCADOPAGO_WEBHOOK_SECRET
-        value: f39f99d8e7ca17d0cc1e6151d5b6d117334b37a9302b18abddac7f1285aef18b
+        sync: false
       - key: MP_FORCE_TEST_PAYER_EMAIL
         value: ""
       - key: APP_BASE_URL
@@ -354,13 +352,11 @@ services:
         value: parklink.events
       - key: NOTIFICATIONS_QUEUE
         value: notifications.events
-      - key: PARKING_SERVICE_URL
-        value: https://parklink-parking-service.onrender.com
-      # El JSON de Firebase ya viene commiteado en notifications-service/secrets/
-      # y el Dockerfile lo copia adentro de la imagen (COPY . .) -- esta ruta
-      # es dónde queda una vez armada, no hace falta subir un Secret File.
+      # El JSON de Firebase no está en git: subilo como Secret File del servicio
+      # (dashboard -> Environment -> Secret Files) con el nombre
+      # firebase-service-account.json. Render lo monta en /etc/secrets/.
       - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: /app/secrets/firebase-service-account.json
+        value: /etc/secrets/firebase-service-account.json
 
   # ---------------- gateway ----------------
   - type: web

@@ -37,10 +37,10 @@ git clone --recurse-submodules git@github.com:ParkLink-AR/root.git
 ### 1. Configurar las variables de entorno
 
 ```bash
-cp .env.example .env
+make env    # crea <servicio>/.env desde su .env.example en cada microservicio (fuera de git)
 ```
 
-Con el `.env` tal cual viene (todo vacío/con defaults de desarrollo) el sistema **ya funciona**: los servicios que necesitan una API key externa (email, SMS, Mercado Pago) caen a un modo "dev" que loguea lo que haría en vez de fallar. Ver [Variables de entorno / API keys](#variables-de-entorno--api-keys) para el detalle de cada una y cuándo hace falta completarla de verdad.
+Cada microservicio lee sus claves de su propio `.env`; el `.env` de root solo tiene los tokens de los túneles de Cloudflare (`make online`). Con los `.env` tal cual vienen (todo vacío/con defaults de desarrollo) el sistema **ya funciona**: los servicios que necesitan una API key externa (email, SMS, Mercado Pago) caen a un modo "dev" que loguea lo que haría en vez de fallar. Ver [Variables de entorno / API keys](#variables-de-entorno--api-keys) para el detalle de cada una y cuándo hace falta completarla de verdad.
 
 ### 2. Docker
 
@@ -105,7 +105,7 @@ npm install
 npx expo start
 ```
 
-`EXPO_PUBLIC_API_URL` es la única variable que necesita, y tiene que apuntar al **gateway** (no a un microservicio directo). El valor por default (`http://localhost:8080`) funciona tal cual para web y simulador iOS corriendo en la misma máquina que `docker compose`. Para emulador Android usá `http://10.0.2.2:8080`; para un dispositivo físico, la IP LAN de la máquina que corre Docker (ej. `http://192.168.1.50:8080`), con el celular en la misma red — el detalle completo está en `mobile/.env.example`.
+`EXPO_PUBLIC_API_URL` tiene que apuntar al **gateway** (no a un microservicio directo). El valor por default (`http://localhost:8080`) funciona tal cual para web y simulador iOS corriendo en la misma máquina que `docker compose`. Para emulador Android usá `http://10.0.2.2:8080`; para un dispositivo físico, la IP LAN de la máquina que corre Docker (ej. `http://192.168.1.50:8080`), con el celular en la misma red — `make local` la pone sola. El resto de las variables está en `mobile/.env.example`.
 
 Para push notifications (development build, no Expo Go) usá `npx expo run:android` / `npx expo run:ios` en vez de `npx expo start` — ver [Push notifications](#push-notifications).
 
@@ -120,11 +120,9 @@ Para push notifications (development build, no Expo Go) usá `npx expo run:andro
 | `booking.pending_approval` — se pagó, falta que el dueño confirme | **propietario** | 🔔 Tenés una reserva para confirmar |
 | `booking.confirmed` — el dueño aprobó (o la cochera es instant-booking) | **conductor** | ✅ ¡Reserva confirmada! |
 
-### Ya viene configurado (proyecto privado)
+### Credenciales de Firebase (proyecto `parklink-app`)
 
-Las credenciales de Firebase (proyecto `parklink-app`) están **commiteadas en los submódulos**:
-
-- `notifications-service/secrets/firebase-service-account.json` — se montea en el contenedor; `docker compose up` lo toma solo, sin tocar el `.env`. En log-only si querés: `FIREBASE_CREDENTIALS_PATH=` (vacío) en el `.env`.
+- `notifications-service/secrets/firebase-service-account.json` (fuera de git) — se montea en el contenedor de notifications-service. Bajala de Firebase Console → Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada. Sin el archivo, o con `FIREBASE_CREDENTIALS_PATH=` (vacío) en el `.env`, queda en log-only.
 - `mobile/google-services.json` (Android) y `mobile/GoogleService-Info.plist` (iOS) — para que el build compile sin bajar nada.
 
 > ⚠️ Si estos repos se hacen públicos, rotá las tres credenciales.
@@ -199,9 +197,6 @@ Si te olvidás este paso, para cualquiera que clone la raíz de nuevo (o corra `
 | `MERCADOPAGO_WEBHOOK_SECRET` | payment-service | El webhook no valida firma (modo demo) | Secret del webhook en el panel de MP |
 | `MP_FORCE_TEST_PAYER_EMAIL` | payment-service | Usa el email del usuario logueado | Email del comprador de prueba del sandbox de MP |
 | `WEBHOOK_BASE_URL` | payment-service | Usa `http://localhost:8004` (MP no puede alcanzarlo) | URL pública del servidor — ver abajo |
-| `FRONTEND_SUCCESS_URL` | payment-service | `parklink://payment/success` | Igual (deep link de la app) |
-| `FRONTEND_FAILURE_URL` | payment-service | `parklink://payment/failure` | Igual |
-| `FRONTEND_PENDING_URL` | payment-service | `parklink://payment/pending` | Igual |
 
 ### Configurar WEBHOOK_BASE_URL para desarrollo local
 

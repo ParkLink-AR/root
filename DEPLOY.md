@@ -92,12 +92,10 @@ mandar (no te cobra de más solo). Sin las tres variables de arriba,
 
 ## 5. Mercado Pago: credenciales reales
 
-Las credenciales que trae el Blueprint (`MERCADOPAGO_ACCESS_TOKEN` /
-`MERCADOPAGO_WEBHOOK_SECRET`) son las mismas que ya usás en local (`root/.env`)
--- lo que sea que hagan ahí (test o real) va a hacer acá. Si querés otro modo
-o cuenta, generá credenciales nuevas en
-https://www.mercadopago.com.ar/developers y reemplazalas en el YAML o
-directo en el dashboard de `parklink-payment-service`.
+`MERCADOPAGO_ACCESS_TOKEN` / `MERCADOPAGO_WEBHOOK_SECRET` van como
+`sync: false`: cargalas en el dashboard de `parklink-payment-service` con los
+mismos valores de `payment-service/.env` (o credenciales nuevas de
+https://www.mercadopago.com.ar/developers).
 
 ## 6. Advertencia sobre el plan free
 
@@ -120,18 +118,8 @@ completaste la sección 4 (Twilio configurado y `SKIP_PHONE_VERIFICATION` en
 `"false"`), poné también `EXPO_PUBLIC_SKIP_PHONE_VERIFICATION=false` para que
 el wizard de registro pida el código real.
 
-## 8. Seguridad de lo que va commiteado en `render.yaml`
+## 8. Secretos
 
-Este es un proyecto personal privado, así que `render.yaml` trae embebidas
-las credenciales reales de Brevo, Cloudflare R2 y Mercado Pago (mismo
-criterio que ya se usa para el JSON de Firebase de `notifications-service`,
-ver `mobile/PUSH_NOTIFICATIONS.md`) -- así el Blueprint queda completo sin
-pasos manuales. **Si este repo alguna vez se hace público, rotá esas
-credenciales primero** (Brevo → Settings → API Keys; Cloudflare → R2 →
-Manage API Tokens; Mercado Pago → Developers → Credenciales) y actualizá
-`render.yaml` con los valores nuevos antes de sacarlo a la luz.
-
-`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` quedan afuera
-de esa lista a propósito -- van como `sync: false` (paso manual, sección 4)
-en vez de embebidos, para no dejar la clave de una cuenta de mensajería paga
-dando vueltas en el historial de git.
+`render.yaml` no trae ningún secreto: los de Brevo, Cloudflare R2, Mercado
+Pago y Twilio van como `sync: false` y se cargan a mano en el dashboard de
+cada servicio, con los mismos valores de tu `.env` local.

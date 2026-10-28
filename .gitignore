@@ -1,2 +1,5 @@
 package-lock.json
 node_modules/
+
+# Config con secretos: vive solo en la máquina (ver .env.example)
+.env

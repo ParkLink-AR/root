@@ -6,19 +6,23 @@ servidor propio. Cada microservicio conserva su propia base Postgres (nunca
 hubo que compartir una sola como en el plan free de Render), y RabbitMQ corre
 como un contenedor más del mismo compose -- sin necesidad de CloudAMQP.
 
-Costo estimado: un CX32 (4 vCPU, 8 GB RAM, 80 GB SSD) ronda 8 USD/mes,
+Costo estimado: un CX22 (2 vCPU, 4 GB RAM, 40 GB SSD) ronda 4,50 USD/mes,
 facturado por hora/mes real sin letra chica de renovación. Contra los ~49
 USD/mes de Render en su plan pago (6 Web Services + 1 Postgres, todos
-Starter), o el sleep/expiración del plan free.
+Starter), o el sleep/expiración del plan free. Es el punto de partida más
+barato -- sin mucho margen para 5 Postgres + RabbitMQ + 6 servicios a la vez,
+pero Hetzner deja resizear el mismo server sin recrearlo si hace falta más
+adelante.
 
 ## 1. Crear el servidor
 
 1. Cuenta en https://www.hetzner.com/cloud, agregar un método de pago.
 2. **New Server** → ubicación (Falkenstein/Nuremberg o Ashburn/Hillsboro si
    la mayoría de los usuarios está en América), imagen **Ubuntu 24.04**, tipo
-   **CX32** (4 vCPU / 8 GB RAM / 80 GB SSD -- suficiente para 5 Postgres +
-   RabbitMQ + 6 servicios chicos; si con el tiempo se siente lento, Hetzner
-   deja resizear el mismo server sin recrearlo).
+   **CX22** (2 vCPU / 4 GB RAM / 40 GB SSD -- el punto de partida más barato
+   para 5 Postgres + RabbitMQ + 6 servicios chicos, justo pero funciona; si
+   con el tiempo se siente lento, Hetzner deja resizear el mismo server sin
+   recrearlo).
 3. Agregar tu clave pública SSH en el wizard de creación (no uses password
    auth).
 4. Activar el **Hetzner Cloud Firewall** del server: permitir entrante solo
@@ -59,25 +63,28 @@ cd parklink
 
 ## 4. Variables de entorno de producción
 
-El `root/.env` local ya tiene todos los secretos reales (JWT, Cloudflare R2,
-Brevo, Mercado Pago, Twilio) -- no hace falta cargarlos de nuevo a mano.
-Copialo desde tu máquina:
+Cada microservicio tiene sus secretos en su propio `<servicio>/.env` (fuera de
+git): JWT, Cloudflare R2, Brevo, Mercado Pago, Twilio. Copialos desde tu máquina:
 
 ```bash
 # Desde tu máquina, no desde el servidor:
-scp /home/numeral/Escritorio/ParkLink/root/.env root@<ip-del-server>:~/parklink/.env
+cd /home/numeral/Escritorio/ParkLink/root
+for s in auth-service booking-service gateway notifications-service parking-service payment-service; do
+  scp $s/.env root@<ip-del-server>:~/parklink/$s/.env
+done
+scp -r /home/numeral/Escritorio/ParkLink/root/notifications-service/secrets root@<ip-del-server>:~/parklink/notifications-service/secrets
 ```
 
-Ajustá en ese `.env`, ya en el servidor, lo que cambia entre local y
+Ajustá en esos `.env`, ya en el servidor, lo que cambia entre local y
 producción:
 
-- `ENVIRONMENT=production`
-- `CORS_ORIGINS=https://admin.tu-dominio.com,https://tu-dominio.com` (nunca
-  `*` en producción -- hoy `compose.yaml` lo default-ea a `*` si no está
-  seteada, ver línea de `gateway`).
-- `JWT_SECRET` / `GATEWAY_INTERNAL_SECRET`: si el `.env` local todavía tiene
-  los defaults de dev (`dev-secret-change-me`, etc.), generá valores nuevos
-  acá (`openssl rand -hex 32`) -- esos sí no se reciclan del local.
+- `ENVIRONMENT=production` (en cada servicio que lo tiene)
+- `CORS_ORIGINS=https://admin.tu-dominio.com,https://tu-dominio.com` en
+  `gateway/.env` y `payment-service/.env` (nunca `*` en producción).
+- `JWT_SECRET` (auth, gateway, payment), `GATEWAY_INTERNAL_SECRET` (todos) e
+  `INTERNAL_SERVICE_KEY` (todos menos gateway): conviene generar valores
+  propios de producción (`openssl rand -hex 32`), el mismo valor en cada
+  servicio que lo usa.
 
 ## 5. Restart policy (falta en el compose actual)
 

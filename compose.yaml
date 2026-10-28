@@ -3,12 +3,16 @@
 # notifications-service y el gateway (+ sus bases de datos y RabbitMQ).
 #
 # Uso:
-#   cp .env.example .env   # completar JWT_SECRET, BREVO_API_KEY, credenciales de Mercado Pago y R2 (ver DEPLOY.md)
-#   docker compose up --build
+#   make env   # crea el .env de cada servicio desde su .env.example (si no existe)
+#   make up
 #
-# Push notifications: el JSON de service-account de Firebase va commiteado en
-# ./notifications-service/secrets/ y se montea en el contenedor, así que las
-# push funcionan sin config extra (ver notifications-service/../mobile/PUSH_NOTIFICATIONS.md).
+# Cada servicio lee sus claves y su config de su propio ./<servicio>/.env (fuera de git).
+# Acá, en `environment`, solo va lo que depende de la red de Docker (bases, URLs entre
+# servicios, RabbitMQ): pisa los valores de localhost que trae cada .env para correr suelto.
+#
+# Push notifications: el JSON de service-account de Firebase va en
+# ./notifications-service/secrets/ (fuera de git) y se montea en el contenedor
+# (ver mobile/PUSH_NOTIFICATIONS.md).
 
 # Public DNS for the services that call out (Mercado Pago, push, email, maps, R2): Docker
 # Desktop's own resolver can stall for seconds on IPv6 lookups (api.mercadopago.com failed
@@ -41,42 +45,21 @@ services:
     <<: *public-dns
     restart: unless-stopped
     build: ./auth-service
+    env_file: ./auth-service/.env
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
       # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # Requests must carry the gateway's secret or the service-to-service key (see
       # each service's trusted-caller middleware) -- shared with the gateway / other services.
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
       # Suspending/closing/deleting an account pauses or archives the owner's spots,
       # cancels its bookings and drops its push tokens (app/services/account_lifecycle.py).
       - PARKING_SERVICE_URL=http://parking-service:3001
       - BOOKING_SERVICE_URL=http://booking-service:8080
       - NOTIFICATIONS_SERVICE_URL=http://notifications-service:8000
       - DATABASE_URL=postgresql://parklink_auth:parklink_auth@db-auth:5432/parklink_auth_db
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
-      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
-      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
-      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}
-      - BREVO_API_KEY=${BREVO_API_KEY:-}
-      - EMAIL_FROM=${EMAIL_FROM:-no-reply@mail.parklink.com.ar}
-      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-ParkLink Argentina}
-      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
-      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
-      - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-}
-      - SKIP_EMAIL_VERIFICATION=${SKIP_EMAIL_VERIFICATION:-true}
-      - SKIP_PHONE_VERIFICATION=${SKIP_PHONE_VERIFICATION:-true}
       # Cloudflare R2 -- avatares subidos acá (ver DEPLOY.md para cómo crear
       # el bucket). parking-service usa el mismo bucket/credenciales para
       # las fotos de cochera.
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
-      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
-      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
     depends_on:
       db-auth:
         condition: service_healthy
@@ -102,23 +85,18 @@ services:
     <<: *public-dns
     restart: unless-stopped
     build: ./parking-service
+    env_file: ./parking-service/.env
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
       # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # Requests must carry the gateway's secret or the service-to-service key (see
       # each service's trusted-caller middleware) -- shared with the gateway / other services.
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       - DB_HOST=db-parking
       - DB_PORT=5432
       - DB_USER=parklink
       - DB_PASSWORD=parklink
       - DB_NAME=parking_service
       - PORT=3001
-      - NOMINATIM_BASE_URL=${NOMINATIM_BASE_URL:-https://nominatim.openstreetmap.org}
-      - NOMINATIM_USER_AGENT=${NOMINATIM_USER_AGENT:-parklink-app/1.0}
       - BOOKING_SERVICE_URL=http://booking-service:8080
       # Antes de publicar una cochera, parking-service le pregunta a auth-service si el
       # dueño tiene cargados sus datos de cobro -- sin esto, publicar falla con 502.
@@ -127,11 +105,6 @@ services:
       # admin aprueba o rechaza su cochera), al mismo exchange que el resto.
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       # Mismo bucket R2 que auth-service, para las fotos de cochera.
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
-      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
-      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
     depends_on:
       db-parking:
         condition: service_healthy
@@ -159,25 +132,19 @@ services:
     <<: *public-dns
     restart: unless-stopped
     build: ./booking-service
+    env_file: ./booking-service/.env
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
       # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # Requests must carry the gateway's secret or the service-to-service key (see
       # each service's trusted-caller middleware) -- shared with the gateway / other services.
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
       - HTTP_PORT=8080
       - DB_DSN=postgres://bookinguser:bookingpass@db-booking:5432/booking_db?sslmode=disable
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - BOOKING_HOLD_MINUTES=10
-      - BOOKING_AVAILABILITY_MAX_DAYS=14
       - PARKING_SERVICE_URL=http://parking-service:3001
       - PAYMENT_SERVICE_URL=http://payment-service:8004
       # Only an ACTIVE account can book (not a suspended one, nor one being deleted).
       - AUTH_SERVICE_URL=http://auth-service:8000
-      - OWNER_APPROVAL_HOURS=24
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       # Bucket R2 propio y PRIVADO para los comprobantes de pago (bank-transfer receipts) --
       # deliberadamente distinto del bucket público de auth-service/parking-service (fotos de
       # perfil/cochera): un comprobante es un documento financiero privado, nunca debe quedar
@@ -185,10 +152,6 @@ services:
       # Cloudflare), pero el token tiene que tener permiso sobre este bucket también. Sin
       # R2_PUBLIC_URL a propósito: las lecturas usan URLs firmadas de corta duración (ver
       # storage.Client.ResolveProofURL), nunca una URL pública fija.
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
-      - R2_PAYOUT_PROOFS_BUCKET_NAME=${R2_PAYOUT_PROOFS_BUCKET_NAME:-}
     depends_on:
       db-booking:
         condition: service_healthy
@@ -216,36 +179,21 @@ services:
     <<: *public-dns
     restart: unless-stopped
     build: ./payment-service
+    env_file: ./payment-service/.env
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
       # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       - PORT=8004
       - DATABASE_URL=postgresql://user_payment:pass_payment@db-payment:5432/payment_db
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
       # Compartida con booking-service: protege POST /internal/refund-by-payment
       # (booking -> payment) y POST /bookings/{id}/confirm (payment -> booking),
       # ninguno de los dos pasa por el gateway.
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
       # Sin credenciales reales de Mercado Pago el servicio arranca igual,
       # pero crear una preferencia de pago real va a fallar.
       # Configurá MERCADOPAGO_ACCESS_TOKEN y MERCADOPAGO_WEBHOOK_SECRET en tu .env.
-      - MERCADOPAGO_ACCESS_TOKEN=${MERCADOPAGO_ACCESS_TOKEN:-APP_USR-REEMPLAZAR}
-      - MERCADOPAGO_WEBHOOK_SECRET=${MERCADOPAGO_WEBHOOK_SECRET:-REEMPLAZAR_CON_LA_SECRET_DE_MERCADO_PAGO}
-      - MP_FORCE_TEST_PAYER_EMAIL=${MP_FORCE_TEST_PAYER_EMAIL:-}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8004}
       # WEBHOOK_BASE_URL debe ser una URL pública (ej. ngrok) para que MP pueda
-      # notificar pagos. Ver instrucciones en .env.example.
-      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL:-http://localhost:8004}
-      # Deep links: Mercado Pago redirige al usuario a estas URLs al terminar el pago.
-      - FRONTEND_SUCCESS_URL=${FRONTEND_SUCCESS_URL:-parklink://payment/success}
-      - FRONTEND_FAILURE_URL=${FRONTEND_FAILURE_URL:-parklink://payment/failure}
-      - FRONTEND_PENDING_URL=${FRONTEND_PENDING_URL:-parklink://payment/pending}
-      - DEFAULT_CURRENCY=${DEFAULT_CURRENCY:-ARS}
+      # notificar pagos.
       - BOOKING_SERVICE_URL=http://booking-service:8080
-      - CORS_ORIGINS=${PAYMENT_CORS_ORIGINS:-*}
       # Eventos de dominio (refund.completed -> aviso al conductor cuando se acredita un
       # reembolso que había fallado), al mismo exchange que el resto.
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
@@ -278,32 +226,20 @@ services:
     <<: *public-dns
     restart: unless-stopped
     build: ./notifications-service
+    env_file: ./notifications-service/.env
     # Internal microservice: all client traffic routes through gateway:8080
     environment:
       # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # Requests must carry the gateway's secret or the service-to-service key (see
       # each service's trusted-caller middleware) -- shared with the gateway / other services.
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-dev-internal-key-change-me}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql://parklink_notif:parklink_notif@db-notifications:5432/parklink_notif_db
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - EVENTS_EXCHANGE=${EVENTS_EXCHANGE:-parklink.events}
-      - NOTIFICATIONS_QUEUE=${NOTIFICATIONS_QUEUE:-notifications.events}
-      - PARKING_SERVICE_URL=http://parking-service:3001
-      # The service-account JSON is committed at ./notifications-service/secrets/
-      # (private repo) and mounted below, so push works out of the box. Override
-      # with FIREBASE_CREDENTIALS_PATH= (empty) in your .env to force log-only.
-      - GOOGLE_APPLICATION_CREDENTIALS=${FIREBASE_CREDENTIALS_PATH:-/run/secrets/firebase-service-account.json}
+      # The service-account JSON lives in ./notifications-service/secrets/ (outside git)
+      # and is mounted below.
+      # FIREBASE_CREDENTIALS_PATH= (empty) in .env forces log-only.
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-service-account.json
       # Email to ParkLink's support inbox when a user opens a ticket or writes on one (same
       # Brevo account as auth-service). ADMIN_PANEL_URL adds an "open in the panel" link.
-      - BREVO_API_KEY=${BREVO_API_KEY:-}
-      - EMAIL_FROM=${EMAIL_FROM:-no-reply@mail.parklink.com.ar}
-      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-ParkLink Argentina}
-      - SUPPORT_INBOX_EMAIL=${SUPPORT_INBOX_EMAIL:-contacto@parklink.com.ar}
-      - ADMIN_PANEL_URL=${ADMIN_PANEL_URL:-}
     volumes:
       - ./notifications-service/secrets:/run/secrets:ro
     depends_on:
@@ -332,25 +268,17 @@ services:
     <<: *public-dns
     restart: unless-stopped
     build: ./gateway
+    env_file: ./gateway/.env
     ports:
       - "8080:8080"
     environment:
       # Error reports to Sentry: off while SENTRY_DSN is empty (see each service's monitoring module).
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
       - AUTH_SERVICE_URL=http://auth-service:8000
       - PARKING_SERVICE_URL=http://parking-service:3001
       - PAYMENT_SERVICE_URL=http://payment-service:8004
       - BOOKING_SERVICE_URL=http://booking-service:8080
       - NOTIFICATIONS_SERVICE_URL=http://notifications-service:8000
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
-      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
-      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
-      - GATEWAY_INTERNAL_SECRET=${GATEWAY_INTERNAL_SECRET:-dev-gateway-secret-change-me}
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - EVENTS_EXCHANGE=${EVENTS_EXCHANGE:-parklink.events}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
     depends_on:
       auth-service:
         condition: service_started
